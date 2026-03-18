@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model ClientAccount {
+  id                 String             @id @default(cuid())
+  slug               String             @unique
+  name               String
+  description        String?
+  primaryTenantId    String?
+  defaultDomain      String?
+  onboardingStatus   String             @default("PENDING")
+  webhookSecret      String
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  sites              Site[]
+  tenantConnections  TenantConnection[]
+  azureSubscriptions AzureSubscription[]
+  memberships        ClientMembership[]
+  resources          Resource[]
+  alertEvents        AlertEventRecord[]
+  dashboards         Dashboard[]
+}
+
+model TenantConnection {
+  id                        String              @id @default(cuid())
+  clientAccountId           String
+  tenantId                  String
+  tenantDisplayName         String?
+  servicePrincipalObjectId  String?
+  consentStatus             String              @default("PENDING")
+  lastValidatedAt           DateTime?
+  lastValidationMessage     String?
+  validatedSubscriptionCount Int                @default(0)
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  clientAccount             ClientAccount       @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+  azureSubscriptions        AzureSubscription[]
+
+  @@unique([clientAccountId, tenantId])
+  @@index([tenantId])
+}
+
+model Site {
+  id              String              @id @default(cuid())
+  clientAccountId String
+  slug            String
+  name            String
+  description     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  clientAccount   ClientAccount       @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+  resources       Resource[]
+  alertEvents     AlertEventRecord[]
+
+  @@unique([clientAccountId, slug])
+}
+
+model PlatformUser {
+  id             String             @id @default(cuid())
+  email          String             @unique
+  displayName    String
+  entraObjectId  String?            @unique
+  isPlatformAdmin Boolean           @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  memberships    ClientMembership[]
+  dashboards     Dashboard[]
+}
+
+model ClientMembership {
+  id              String         @id @default(cuid())
+  clientAccountId String
+  platformUserId  String
+  role            String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  clientAccount   ClientAccount  @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+  platformUser    PlatformUser   @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+
+  @@unique([clientAccountId, platformUserId])
+}
+
+model AzureSubscription {
+  id                   String             @id @default(cuid())
+  clientAccountId      String
+  tenantConnectionId   String?
+  externalSubscriptionId String           @unique
+  displayName          String
+  tenantId             String?
+  status               String             @default("PENDING")
+  onboardingStatus     String             @default("PENDING")
+  defaultWebhookSecret String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  clientAccount        ClientAccount      @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+  tenantConnection     TenantConnection?  @relation(fields: [tenantConnectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  resources            Resource[]
+  alertEvents          AlertEventRecord[]
+
+  @@index([clientAccountId, tenantId])
+  @@index([tenantConnectionId])
+}
+
+model Resource {
+  id                  String                  @id @default(cuid())
+  clientAccountId     String
+  azureSubscriptionId String?
+  siteId              String?
+  resourceId          String                  @unique
+  providerType        String
+  displayName         String
+  resourceGroup       String?
+  region              String?
+  tagsJson            String?
+  status              String                  @default("DISCOVERED")
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  clientAccount       ClientAccount           @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+  azureSubscription   AzureSubscription?      @relation(fields: [azureSubscriptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  site                Site?                   @relation(fields: [siteId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  alertEvents         AlertEventRecord[]
+
+  @@index([clientAccountId])
+  @@index([azureSubscriptionId])
+  @@index([siteId])
+}
+
+model AlertEventRecord {
+  id                   String               @id @default(cuid())
+  externalAlertId      String
+  clientAccountId      String
+  clientSlugSnapshot   String?
+  azureSubscriptionId  String?
+  subscriptionExternalId String?
+  siteId               String?
+  resourceIdRef        String?
+  resourceIdsJson      String
+  ruleName             String
+  severity             String
+  signalType           String
+  status               String
+  firedAt              DateTime
+  resolvedAt           DateTime?
+  receivedAt           DateTime
+  lagMs                Int
+  resourceGroup        String?
+  metricName           String?
+  metricValue          Float?
+  threshold            Float?
+  description          String?
+  rawPayloadJson       String?
+  isSimulated          Boolean              @default(false)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  clientAccount        ClientAccount        @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+  azureSubscription    AzureSubscription?   @relation(fields: [azureSubscriptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  site                 Site?                @relation(fields: [siteId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  resource             Resource?            @relation(fields: [resourceIdRef], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([clientAccountId, externalAlertId])
+  @@index([clientAccountId, status, receivedAt])
+  @@index([azureSubscriptionId, receivedAt])
+  @@index([resourceIdRef, receivedAt])
+}
+
+model Dashboard {
+  id              String              @id @default(cuid())
+  clientAccountId String?
+  ownerUserId     String?
+  slug            String
+  name            String
+  description     String?
+  visibility      String              @default("PRIVATE")
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  clientAccount   ClientAccount?      @relation(fields: [clientAccountId], references: [id], onDelete: SetNull)
+  ownerUser       PlatformUser?       @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  widgets         DashboardWidget[]
+
+  @@unique([clientAccountId, slug])
+  @@index([ownerUserId])
+}
+
+model DashboardWidget {
+  id            String     @id @default(cuid())
+  dashboardId   String
+  title         String
+  widgetType    String
+  positionX     Int
+  positionY     Int
+  width         Int
+  height        Int
+  settingsJson  String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  dashboard     Dashboard  @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([dashboardId, positionY, positionX])
+}
