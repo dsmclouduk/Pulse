@@ -20,12 +20,14 @@ interface ResourceTreeProps {
   onOpenResource: (resource: ResourceSummary) => void;
 }
 
+type SeverityCounts = Partial<Record<AlertSeverity, number>>;
+
 interface TypeNode {
   resourceType: string;
   label: string;
   resources: ResourceSummary[];
   firing: number;
-  highest: AlertSeverity | null;
+  bySeverity: SeverityCounts;
 }
 
 interface ClientNode {
@@ -35,10 +37,9 @@ interface ClientNode {
   types: TypeNode[];
   total: number;
   firing: number;
-  highest: AlertSeverity | null;
+  bySeverity: SeverityCounts;
 }
 
-const SEVERITY_RANK: Record<AlertSeverity, number> = { Sev0: 0, Sev1: 1, Sev2: 2, Sev3: 3, Sev4: 4 };
 const SEVERITY_DOT: Record<AlertSeverity, string> = {
   Sev0: 'bg-sev-critical',
   Sev1: 'bg-sev-error',
@@ -47,10 +48,11 @@ const SEVERITY_DOT: Record<AlertSeverity, string> = {
   Sev4: 'bg-sev-warning'
 };
 
-function higher(left: AlertSeverity | null, right: AlertSeverity | null): AlertSeverity | null {
-  if (!left) return right;
-  if (!right) return left;
-  return SEVERITY_RANK[left] <= SEVERITY_RANK[right] ? left : right;
+/** Counts a resource's worst firing severity once, so a node shows one chip per severity present. */
+function countSeverity(counts: SeverityCounts, severity: AlertSeverity | null): void {
+  if (severity) {
+    counts[severity] = (counts[severity] ?? 0) + 1;
+  }
 }
 
 export function clientKeyFor(resource: ResourceSummary): string {
@@ -82,7 +84,7 @@ export function buildTree(resources: ResourceSummary[]): ClientNode[] {
         types: [],
         total: 0,
         firing: 0,
-        highest: null
+        bySeverity: {}
       };
       clients.set(key, client);
     }
@@ -90,16 +92,16 @@ export function buildTree(resources: ResourceSummary[]): ClientNode[] {
     let type = client.types.find((entry) => entry.resourceType === resource.resourceType);
 
     if (!type) {
-      type = { resourceType: resource.resourceType, label: resource.resourceTypeLabel, resources: [], firing: 0, highest: null };
+      type = { resourceType: resource.resourceType, label: resource.resourceTypeLabel, resources: [], firing: 0, bySeverity: {} };
       client.types.push(type);
     }
 
     type.resources.push(resource);
     type.firing += resource.firingCount > 0 ? 1 : 0;
-    type.highest = higher(type.highest, resource.highestFiringSeverity);
+    countSeverity(type.bySeverity, resource.highestFiringSeverity);
     client.total += 1;
     client.firing += resource.firingCount > 0 ? 1 : 0;
-    client.highest = higher(client.highest, resource.highestFiringSeverity);
+    countSeverity(client.bySeverity, resource.highestFiringSeverity);
   }
 
   for (const client of clients.values()) {
@@ -120,13 +122,21 @@ function Chevron({ open }: Readonly<{ open: boolean }>) {
   );
 }
 
-function CountPill({ firing, total, highest }: Readonly<{ firing: number; total: number; highest: AlertSeverity | null }>) {
+const SEVERITY_ORDER: AlertSeverity[] = ['Sev0', 'Sev1', 'Sev2', 'Sev3', 'Sev4'];
+
+/** One chip per firing severity, worst first, then the total when it adds something. */
+function CountPill({ firing, total, bySeverity }: Readonly<{ firing: number; total: number; bySeverity: SeverityCounts }>) {
   return (
     <span className="ml-auto flex items-center gap-1 text-[10px] tabular-nums text-[var(--color-text-tertiary)]">
-      {firing > 0 && highest ? (
-        <span className={`inline-flex min-w-[1.125rem] items-center justify-center rounded-full px-1 font-semibold text-white ${SEVERITY_DOT[highest]}`}>{firing}</span>
-      ) : null}
-      {/* The plain total only earns its place when it says something the firing chip does not. */}
+      {SEVERITY_ORDER.filter((severity) => (bySeverity[severity] ?? 0) > 0).map((severity) => (
+        <span
+          key={severity}
+          title={`${bySeverity[severity]} firing at ${severity}`}
+          className={`inline-flex min-w-[1.125rem] items-center justify-center rounded-full px-1 font-semibold text-white ${SEVERITY_DOT[severity]}`}
+        >
+          {bySeverity[severity]}
+        </span>
+      ))}
       {total > firing ? <span>{total}</span> : null}
     </span>
   );
@@ -158,8 +168,6 @@ export function ResourceTree({ resources, selection, onSelect, onOpenResource }:
     });
   }
 
-  const totalFiring = tree.reduce((sum, client) => sum + client.firing, 0);
-  const totalHighest = tree.reduce<AlertSeverity | null>((best, client) => higher(best, client.highest), null);
 
   return (
     <nav className="flex h-full flex-col overflow-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2" aria-label="Resource tree">
@@ -171,7 +179,6 @@ export function ResourceTree({ resources, selection, onSelect, onOpenResource }:
           <path d="M8 5v3M8 8l-4.5 3.5M8 8l4.5 3.5" />
         </svg>
         All resources
-        <CountPill firing={totalFiring} total={resources.length} highest={totalHighest} />
       </button>
 
       {tree.map((client) => {
@@ -191,7 +198,7 @@ export function ResourceTree({ resources, selection, onSelect, onOpenResource }:
                     <span className="block truncate text-[11px] font-normal text-[var(--color-text-tertiary)]">{client.sublabel}</span>
                   )}
                 </span>
-                <CountPill firing={client.firing} total={client.total} highest={client.highest} />
+                <CountPill firing={client.firing} total={client.total} bySeverity={client.bySeverity} />
               </button>
             </div>
 
@@ -209,7 +216,7 @@ export function ResourceTree({ resources, selection, onSelect, onOpenResource }:
                       </button>
                       <button type="button" onClick={() => onSelect(typeSel)} className={`${rowBase} ${isSelected(selection, typeSel) ? rowActive : rowIdle}`}>
                         <span className="truncate text-[var(--color-text-secondary)]">{type.label}</span>
-                        <CountPill firing={type.firing} total={type.resources.length} highest={type.highest} />
+                        <CountPill firing={type.firing} total={type.resources.length} bySeverity={type.bySeverity} />
                       </button>
                     </div>
 

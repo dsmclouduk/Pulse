@@ -59,7 +59,10 @@ export function normaliseAzureAlert(payload: AzureCommonAlertSchema, receivedAt:
   const { essentials, alertContext } = payload.data;
   const primaryCondition = alertContext?.condition?.allOf?.[0];
   const firedAt = essentials.firedDateTime;
-  const lagMs = new Date(receivedAt).getTime() - new Date(firedAt).getTime();
+  // Lag measures how long the event we just received took to reach us. A Resolved payload keeps the
+  // original firedDateTime, so measuring from it would report the whole incident duration as lag.
+  const eventAt = essentials.monitorCondition === 'Resolved' ? (essentials.resolvedDateTime ?? firedAt) : firedAt;
+  const lagMs = new Date(receivedAt).getTime() - new Date(eventAt).getTime();
   const primaryResourceId = essentials.alertTargetIDs[0];
   const { subscriptionId, resourceGroup } = extractResourceMetadata(primaryResourceId);
 
