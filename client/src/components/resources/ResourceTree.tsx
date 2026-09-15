@@ -62,16 +62,9 @@ function clientLabel(resource: ResourceSummary): string {
   return resource.clientName ?? resource.clientSlug ?? resource.subscriptionName ?? 'Unscoped alerts';
 }
 
+/** Tenant only: a client can hold many subscriptions, so naming one here would be misleading. */
 function clientSublabel(resource: ResourceSummary): string | undefined {
-  const tenant = resource.tenantName ?? (resource.tenantId ? `tenant ${resource.tenantId.slice(0, 8)}…` : undefined);
-  const subscription = resource.subscriptionName ?? (resource.subscriptionId ? `subscription ${resource.subscriptionId.slice(0, 8)}…` : undefined);
-  return [tenant, subscription].filter(Boolean).join(' · ') || undefined;
-}
-
-function shortType(resourceType: string): string {
-  const parts = resourceType.split('/');
-  const last = parts[parts.length - 1] ?? resourceType;
-  return last.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (character) => character.toUpperCase());
+  return resource.tenantName ?? (resource.tenantId ? `Tenant ${resource.tenantId.slice(0, 8)}…` : undefined);
 }
 
 export function buildTree(resources: ResourceSummary[]): ClientNode[] {
@@ -97,7 +90,7 @@ export function buildTree(resources: ResourceSummary[]): ClientNode[] {
     let type = client.types.find((entry) => entry.resourceType === resource.resourceType);
 
     if (!type) {
-      type = { resourceType: resource.resourceType, label: shortType(resource.resourceType), resources: [], firing: 0, highest: null };
+      type = { resourceType: resource.resourceType, label: resource.resourceTypeLabel, resources: [], firing: 0, highest: null };
       client.types.push(type);
     }
 
@@ -129,11 +122,12 @@ function Chevron({ open }: Readonly<{ open: boolean }>) {
 
 function CountPill({ firing, total, highest }: Readonly<{ firing: number; total: number; highest: AlertSeverity | null }>) {
   return (
-    <span className="ml-auto flex items-center gap-1 text-[10px] text-[var(--color-text-tertiary)]">
-      {firing > 0 && highest && (
-        <span className={`inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1 font-semibold text-white ${SEVERITY_DOT[highest]}`}>{firing}</span>
-      )}
-      <span>{total}</span>
+    <span className="ml-auto flex items-center gap-1 text-[10px] tabular-nums text-[var(--color-text-tertiary)]">
+      {firing > 0 && highest ? (
+        <span className={`inline-flex min-w-[1.125rem] items-center justify-center rounded-full px-1 font-semibold text-white ${SEVERITY_DOT[highest]}`}>{firing}</span>
+      ) : null}
+      {/* The plain total only earns its place when it says something the firing chip does not. */}
+      {total > firing ? <span>{total}</span> : null}
     </span>
   );
 }

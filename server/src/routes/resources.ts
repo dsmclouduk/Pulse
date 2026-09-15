@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import type { AlertQueryFilters } from '../lib/alertRepository.js';
+import { getClientOverview } from '../lib/resources/clientOverview.js';
 import { getResourceHistory, listResourceSummaries } from '../lib/resources/resourceSummary.js';
 
 /**
@@ -23,6 +24,12 @@ function filtersFromQuery(query: Record<string, unknown>): AlertQueryFilters {
 
 resourcesRouter.get('/', async (request, response) => {
   response.json(await listResourceSummaries(filtersFromQuery(request.query)));
+});
+
+/** Tenant-level summary for the top of the resource tree. No clientSlug means the unscoped bucket. */
+resourcesRouter.get('/client-overview', async (request, response) => {
+  const filters = filtersFromQuery(request.query);
+  response.json(await getClientOverview(queryString(request.query.clientSlug), { ...filters, clientSlug: undefined }));
 });
 
 resourcesRouter.get('/history', async (request, response) => {

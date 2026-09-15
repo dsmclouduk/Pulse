@@ -437,7 +437,9 @@ export interface ResourceLastDiagnosis {
 export interface ResourceSummary {
   resourceId: string;
   name: string;
+  /** Always lower-cased: Azure sends mixed casing, so this is the stable grouping key. */
   resourceType: string;
+  resourceTypeLabel: string;
   resourceGroup?: string;
   subscriptionId?: string;
   clientSlug?: string;
@@ -456,6 +458,37 @@ export interface ResourceSummary {
   noteCount: number;
   lastDiagnosis: ResourceLastDiagnosis | null;
   isSimulated: boolean;
+}
+
+export interface ClientSubscriptionSummary {
+  externalSubscriptionId: string;
+  displayName: string;
+  tenantId?: string;
+  status?: string;
+  onboardingStatus?: string;
+  resourceCount: number;
+}
+
+/** Everything the client (tenant) overview panel shows when the top of the resource tree is selected. */
+export interface ClientOverview {
+  clientSlug: string | null;
+  clientName: string;
+  tenantId?: string;
+  tenantName?: string;
+  onboardingStatus?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  subscriptions: ClientSubscriptionSummary[];
+  resourceCount: number;
+  alertCount: number;
+  firingCount: number;
+  resolvedCount: number;
+  alertsLast30Days: number;
+  firingBySeverity: Record<AlertSeverity, number>;
+  lastAlertAt: string | null;
+  diagnosisCount: number;
+  noteCount: number;
+  simulatedOnly: boolean;
 }
 
 export interface ResourceHistoryEntry {

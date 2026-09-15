@@ -19,6 +19,11 @@ export function resourceNameFromId(resourceId: string): string {
   return parts.at(-1) ?? resourceId;
 }
 
+/**
+ * Azure is inconsistent about casing: alert payloads carry lower-cased ARM paths while our own
+ * simulated ids use the canonical form, so the raw string cannot be used as a grouping key or the
+ * same type appears twice. Always return the lower-cased type and pair it with a display label.
+ */
 export function resourceTypeFromId(resourceId: string): string {
   const parts = resourceId.split('/').filter(Boolean);
   const providersIndex = parts.findIndex((part) => part.toLowerCase() === 'providers');
@@ -27,7 +32,45 @@ export function resourceTypeFromId(resourceId: string): string {
     return 'unknown';
   }
 
-  return `${parts[providersIndex + 1]}/${parts[providersIndex + 2]}`;
+  return `${parts[providersIndex + 1]}/${parts[providersIndex + 2]}`.toLowerCase();
+}
+
+/** Display names for the types the baseline covers; anything else falls back to the raw segment. */
+const RESOURCE_TYPE_LABELS: Record<string, string> = {
+  'microsoft.compute/virtualmachines': 'Virtual machines',
+  'microsoft.compute/virtualmachinescalesets': 'VM scale sets',
+  'microsoft.hybridcompute/machines': 'Arc servers',
+  'microsoft.web/sites': 'App Services',
+  'microsoft.web/serverfarms': 'App Service plans',
+  'microsoft.sql/servers': 'SQL servers',
+  'microsoft.sql/servers/databases': 'SQL databases',
+  'microsoft.sql/servers/elasticpools': 'SQL elastic pools',
+  'microsoft.storage/storageaccounts': 'Storage accounts',
+  'microsoft.keyvault/vaults': 'Key vaults',
+  'microsoft.containerservice/managedclusters': 'AKS clusters',
+  'microsoft.network/applicationgateways': 'Application gateways',
+  'microsoft.network/loadbalancers': 'Load balancers',
+  'microsoft.network/virtualnetworkgateways': 'VPN gateways',
+  'microsoft.network/azurefirewalls': 'Azure firewalls',
+  'microsoft.network/publicipaddresses': 'Public IP addresses',
+  'microsoft.documentdb/databaseaccounts': 'Cosmos DB accounts',
+  'microsoft.cache/redis': 'Redis caches',
+  'microsoft.servicebus/namespaces': 'Service Bus namespaces',
+  'microsoft.recoveryservices/vaults': 'Recovery Services vaults',
+  'microsoft.operationalinsights/workspaces': 'Log Analytics workspaces',
+  'microsoft.insights/components': 'Application Insights',
+  unknown: 'Other resources'
+};
+
+export function resourceTypeLabelFor(resourceType: string): string {
+  const known = RESOURCE_TYPE_LABELS[resourceType.toLowerCase()];
+
+  if (known) {
+    return known;
+  }
+
+  const last = resourceType.split('/').at(-1) ?? resourceType;
+  return last.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, (character) => character.toUpperCase());
 }
 
 function firstLine(body: string): string {
@@ -111,6 +154,7 @@ export function summariseResources(alerts: AlertEvent[], comments: CommentIndex)
       resourceId,
       name: resourceNameFromId(resourceId),
       resourceType: resourceTypeFromId(resourceId),
+      resourceTypeLabel: resourceTypeLabelFor(resourceTypeFromId(resourceId)),
       resourceGroup: last.resourceGroup,
       subscriptionId: last.subscriptionId,
       clientSlug: last.clientSlug,

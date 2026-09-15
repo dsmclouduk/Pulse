@@ -332,7 +332,7 @@ export function SimulatePanel({ clientSlug }: Readonly<SimulatePanelProps>) {
         <CardHeader
           eyebrow="Alert payload"
           title={scenario === 'custom' ? 'Custom alert' : presets.find((preset) => preset.id === scenario)?.label ?? 'Alert'}
-          description={clientSlug ? `Scoped to client "${clientSlug}"` : 'Unscoped (in-memory store). Pick a client in the top bar to scope it.'}
+          description={clientSlug ? `Scoped to client "${clientSlug}"` : 'Unscoped: not persisted. Pick a client in the top bar to scope it.'}
           actions={<Badge tone="warning">Dev only</Badge>}
         />
 

@@ -63,7 +63,7 @@ function ClientScopeSelector({ selectedClientSlug, onSelectClientSlug }: Readonl
         disabled={isLoading}
         className="h-7 max-w-[180px] rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs text-[var(--color-text)] focus:border-accent focus:outline-none"
       >
-        <option value="">All alerts (in-memory)</option>
+        <option value="">All clients</option>
         {clients.map((client) => (
           <option key={client.id} value={client.slug}>
             {client.name}

@@ -16,6 +16,8 @@ export type {
   SettingsSummary,
   AzureCommonAlertSchema,
   ClientAccountSummary,
+  ClientOverview,
+  ClientSubscriptionSummary,
   CommentAuthorKind,
   CommentKind,
   CreateAlertCommentRequest,

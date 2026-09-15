@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { UrgencyBadge } from '@/components/alerts/EnrichmentBadges';
 import { SeverityIndicator } from '@/components/alerts/SeverityIndicator';
 import { ResourceDetailPanel, type ResourceTab } from '@/components/resources/ResourceDetailPanel';
+import { ClientOverviewPanel } from '@/components/resources/ClientOverviewPanel';
 import { ResourceTree, clientKeyFor, type TreeSelection } from '@/components/resources/ResourceTree';
 import { Badge, Button, EmptyState, Input, Notice, Spinner } from '@/components/ui';
 import { useAlertData } from '@/context/AlertDataContext';
@@ -15,11 +16,6 @@ interface ResourcesPageProps {
 }
 
 type SortKey = 'lastAlertAt' | 'alertCount' | 'firingCount' | 'name';
-
-function shortType(resourceType: string): string {
-  const parts = resourceType.split('/');
-  return parts[parts.length - 1] ?? resourceType;
-}
 
 /**
  * Resources are derived from alerts: anything that has ever alerted appears here, with its history.
@@ -101,6 +97,15 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
     });
   }, [resources, search, onlyFiring, sortKey, selection]);
 
+  // The tree keys clients by slug, falling back to subscription for alerts with no client account.
+  const selectedClientSlug = useMemo(() => {
+    if (selection.kind !== 'client') {
+      return null;
+    }
+
+    return resources.find((resource) => clientKeyFor(resource) === selection.clientKey)?.clientSlug ?? null;
+  }, [resources, selection]);
+
   const totals = useMemo(
     () => ({
       resources: resources.length,
@@ -180,18 +185,23 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
             {error}
           </Notice>
         )}
-        {isLoading && resources.length === 0 && (
+        {selection.kind === 'client' && !openResource_ && (
+          <div className="p-4">
+            <ClientOverviewPanel clientSlug={selectedClientSlug} refreshKey={refreshKey} />
+          </div>
+        )}
+        {selection.kind !== 'client' && isLoading && resources.length === 0 && (
           <div className="flex items-center gap-2 p-6 text-sm text-[var(--color-text-secondary)]">
             <Spinner /> Loading resources…
           </div>
         )}
-        {!isLoading && visible.length === 0 && (
+        {selection.kind !== 'client' && !isLoading && visible.length === 0 && (
           <EmptyState className="m-6">
             {resources.length === 0 ? 'No resource has alerted yet. Resources appear here the first time an alert arrives for them.' : 'No resources match the current selection or filter.'}
           </EmptyState>
         )}
 
-        {visible.length > 0 && (
+        {selection.kind !== 'client' && visible.length > 0 && (
           <table className="w-full border-collapse">
             <thead className="sticky top-0 z-10 bg-[var(--color-header)]">
               <tr>
@@ -223,7 +233,7 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
                       {resource.clientSlug ? ` · ${resource.clientSlug}` : ''}
                     </div>
                   </td>
-                  <td className={`${td} text-[var(--color-text-secondary)]`}>{shortType(resource.resourceType)}</td>
+                  <td className={`${td} text-[var(--color-text-secondary)]`}>{resource.resourceTypeLabel}</td>
                   <td className={td}>
                     {resource.highestFiringSeverity ? (
                       <SeverityIndicator severity={resource.highestFiringSeverity} status="Fired" />

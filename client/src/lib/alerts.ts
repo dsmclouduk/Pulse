@@ -89,5 +89,5 @@ export function shortenResourceId(resourceId: string | undefined): string {
     return resourceId;
   }
 
-  return `${parts.slice(-2).join('/')}`;
+  return parts.at(-1) ?? resourceId;
 }
