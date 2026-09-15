@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import type { AlertEvent, AlertSeverity } from '@/types';
@@ -7,8 +7,8 @@ import type { SidebarSeverityLevel } from '@/components/layout/Sidebar';
 import { AlertToolbar } from '@/components/alerts/AlertToolbar';
 import { AlertChart } from '@/components/alerts/AlertChart';
 import { AlertTabBar } from '@/components/alerts/AlertTabBar';
-import { AlertTable } from '@/components/alerts/AlertTable';
-import { AlertDetailPanel } from '@/components/alerts/AlertDetailPanel';
+import { AlertTable, DEFAULT_PINNED_WIDTH } from '@/components/alerts/AlertTable';
+import { AlertDetailPanel, type DetailTab } from '@/components/alerts/AlertDetailPanel';
 import { useAlertData } from '@/context/AlertDataContext';
 import { DEFAULT_FILTERS, filterAndSort, type AlertFilters, type SortField } from '@/lib/alertFilters';
 
@@ -27,18 +27,19 @@ const SEVERITY_LEVEL_MAP: Record<SidebarSeverityLevel, AlertSeverity[]> = {
   warning: ['Sev2', 'Sev3', 'Sev4']
 };
 
-const DEFAULT_DETAIL_HEIGHT = 360;
+/** The flyout never covers less than this much of the page, even if the pinned columns are dragged wide. */
+const MIN_FLYOUT_WIDTH = 520;
 
 export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter }: Readonly<AlertsPageProps>) {
   const [filters, setFilters] = useState<AlertFilters>({ ...DEFAULT_FILTERS });
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
-  const [detailHeight, setDetailHeight] = useState(DEFAULT_DETAIL_HEIGHT);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [pinnedWidth, setPinnedWidth] = useState(DEFAULT_PINNED_WIDTH);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [requestedTab, setRequestedTab] = useState<'overview' | 'metrics' | 'diagnosis' | undefined>(undefined);
+  const [requestedTab, setRequestedTab] = useState<DetailTab | undefined>(undefined);
   const { mergeComments } = useAlertData();
 
-  // Deep link: /alerts?alert=<id>&tab=metrics opens that alert's drawer on a tab (used by the Simulate page).
+  // Deep link: /alerts?alert=<id>&tab=metrics opens that alert's flyout on a tab (used by the Simulate page).
   useEffect(() => {
     const requested = searchParams.get('alert');
     const tab = searchParams.get('tab');
@@ -79,10 +80,13 @@ export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter
     }));
   }
 
+  /** Clicking a row opens the flyout for it; clicking the already-open row toggles it closed. */
   function handleSelectAlert(alert: AlertEvent) {
     setRequestedTab(undefined);
     setSelectedAlertId((prev) => (prev === alert.id ? null : alert.id));
   }
+
+  const closeFlyout = useCallback(() => setSelectedAlertId(null), []);
 
   function handleFiltersChange(next: AlertFilters) {
     onClearSidebarFilter();
@@ -160,7 +164,10 @@ export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter
           dimensions: alert.dimensions,
           clientSlug: alert.clientSlug,
           unique: true,
-          syntheticHistory: alert.metricName && /disk/i.test(alert.metricName) ? { pattern: 'steady-growth', endPercent: alert.metricValue } : { pattern: 'flat', startPercent: alert.metricValue, endPercent: alert.metricValue }
+          syntheticHistory:
+            alert.metricName && /disk/i.test(alert.metricName)
+              ? { pattern: 'steady-growth', endPercent: alert.metricValue }
+              : { pattern: 'flat', startPercent: alert.metricValue, endPercent: alert.metricValue }
         })
       });
 
@@ -185,30 +192,35 @@ export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter
         onClearChecked={() => setCheckedIds(new Set())}
       />
 
-      <AlertChart alerts={alerts} />
+      {/* Chart + table region. The flyout overlays the right-hand side of this region, leaving the
+          pinned Resource + Severity columns visible so rows can be clicked through. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <AlertChart alerts={alerts} />
 
-      <AlertTabBar alertCount={processedAlerts.length} />
+        <AlertTabBar alertCount={processedAlerts.length} />
 
-      <AlertTable
-        alerts={processedAlerts}
-        selectedAlertId={selectedAlertId}
-        onSelectAlert={handleSelectAlert}
-        sortBy={filters.sortBy}
-        sortDirection={filters.sortDirection}
-        onSort={handleSort}
-        totalCount={alerts.length}
-        checkedIds={checkedIds}
-        onCheckedIdsChange={setCheckedIds}
-      />
+        <AlertTable
+          alerts={processedAlerts}
+          selectedAlertId={selectedAlertId}
+          onSelectAlert={handleSelectAlert}
+          sortBy={filters.sortBy}
+          sortDirection={filters.sortDirection}
+          onSort={handleSort}
+          totalCount={alerts.length}
+          checkedIds={checkedIds}
+          onCheckedIdsChange={setCheckedIds}
+          onPinnedWidthChange={setPinnedWidth}
+        />
 
-      <AlertDetailPanel
-        alert={selectedAlert}
-        initialTab={requestedTab}
-        onClose={() => setSelectedAlertId(null)}
-        height={detailHeight}
-        onHeightChange={setDetailHeight}
-        onRefire={(alert) => void handleRefire(alert)}
-      />
+        {selectedAlert && (
+          <div
+            className="absolute inset-y-0 right-0 z-20"
+            style={{ left: pinnedWidth, minWidth: MIN_FLYOUT_WIDTH }}
+          >
+            <AlertDetailPanel alert={selectedAlert} initialTab={requestedTab} onClose={closeFlyout} onRefire={(alert) => void handleRefire(alert)} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

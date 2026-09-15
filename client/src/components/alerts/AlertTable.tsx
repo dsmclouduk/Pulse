@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { AlertEvent } from '@/types';
 import type { SortField } from '@/lib/alertFilters';
@@ -19,6 +19,8 @@ interface AlertTableProps {
   totalCount: number;
   checkedIds: Set<string>;
   onCheckedIdsChange: (ids: Set<string>) => void;
+  /** Reports the total width of the pinned columns (checkbox + resource + severity) so a flyout can align to it. */
+  onPinnedWidthChange?: (width: number) => void;
 }
 
 interface ColumnDef {
@@ -28,20 +30,25 @@ interface ColumnDef {
   minWidth: number;
   sortable: boolean;
   sortKey?: SortField;
+  /** Pinned columns stay visible while the detail flyout is open and when scrolling horizontally. */
+  pinned?: boolean;
 }
 
 const COLUMNS: ColumnDef[] = [
-  { key: 'checkbox', label: '', defaultWidth: 28, minWidth: 28, sortable: false },
-  { key: 'severity', label: 'Severity', defaultWidth: 150, minWidth: 90, sortable: true, sortKey: 'severity' },
+  { key: 'checkbox', label: '', defaultWidth: 28, minWidth: 28, sortable: false, pinned: true },
+  { key: 'resource', label: 'Resource', defaultWidth: 220, minWidth: 120, sortable: true, sortKey: 'resource', pinned: true },
+  { key: 'severity', label: 'Severity', defaultWidth: 150, minWidth: 96, sortable: true, sortKey: 'severity', pinned: true },
   { key: 'agent', label: 'Agent', defaultWidth: 104, minWidth: 60, sortable: false },
   { key: 'reportedAt', label: 'Reported At', defaultWidth: 220, minWidth: 140, sortable: true, sortKey: 'reportedAt' },
   { key: 'lag', label: 'Lag', defaultWidth: 84, minWidth: 64, sortable: true, sortKey: 'lag' },
-  { key: 'resource', label: 'Resource', defaultWidth: 200, minWidth: 100, sortable: true, sortKey: 'resource' },
   { key: 'datapoint', label: 'Datapoint', defaultWidth: 150, minWidth: 80, sortable: true, sortKey: 'datapoint' },
   { key: 'alertValue', label: 'Alert Value', defaultWidth: 96, minWidth: 60, sortable: true, sortKey: 'alertValue' },
   { key: 'alertRule', label: 'Alert Rule', defaultWidth: 220, minWidth: 100, sortable: true, sortKey: 'alertRule' },
   { key: 'threshold', label: 'Threshold', defaultWidth: 96, minWidth: 60, sortable: true, sortKey: 'threshold' }
 ];
+
+export const PINNED_COLUMN_COUNT = COLUMNS.filter((column) => column.pinned).length;
+export const DEFAULT_PINNED_WIDTH = COLUMNS.filter((column) => column.pinned).reduce((sum, column) => sum + column.defaultWidth, 0);
 
 const thBase =
   'relative px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-[var(--color-text-secondary)] border-r border-b border-[var(--color-border)] whitespace-nowrap select-none';
@@ -113,15 +120,50 @@ function AgentCell({ alertId }: Readonly<{ alertId: string }>) {
   }
 
   if (status.state === 'failed') {
-    return <span className="text-[10px] text-sev-critical" title={status.message}>failed</span>;
+    return (
+      <span className="text-[10px] text-sev-critical" title={status.message}>
+        failed
+      </span>
+    );
   }
 
   return <span className="text-[var(--color-text-tertiary)]">—</span>;
 }
 
-export function AlertTable({ alerts, selectedAlertId, onSelectAlert, sortBy, sortDirection, onSort, totalCount, checkedIds, onCheckedIdsChange }: Readonly<AlertTableProps>) {
+/** Sticky positioning for pinned columns: left offset is the sum of the pinned widths before it. */
+function pinnedStyle(columnWidths: number[], colIndex: number): React.CSSProperties | undefined {
+  if (!COLUMNS[colIndex].pinned) {
+    return undefined;
+  }
+
+  let left = 0;
+  for (let index = 0; index < colIndex; index += 1) {
+    left += columnWidths[index];
+  }
+
+  return { position: 'sticky', left, zIndex: 5 };
+}
+
+export function AlertTable({
+  alerts,
+  selectedAlertId,
+  onSelectAlert,
+  sortBy,
+  sortDirection,
+  onSort,
+  totalCount,
+  checkedIds,
+  onCheckedIdsChange,
+  onPinnedWidthChange
+}: Readonly<AlertTableProps>) {
   const [columnWidths, setColumnWidths] = useState<number[]>(() => COLUMNS.map((c) => c.defaultWidth));
   const dragRef = useRef<{ colIndex: number; startX: number; startWidth: number } | null>(null);
+
+  const pinnedWidth = columnWidths.slice(0, PINNED_COLUMN_COUNT).reduce((sum, width) => sum + width, 0);
+
+  useEffect(() => {
+    onPinnedWidthChange?.(pinnedWidth);
+  }, [pinnedWidth, onPinnedWidthChange]);
 
   const handleResizeStart = useCallback(
     (colIndex: number, e: React.MouseEvent) => {
@@ -209,7 +251,8 @@ export function AlertTable({ alerts, selectedAlertId, onSelectAlert, sortBy, sor
               {COLUMNS.map((col, colIndex) => (
                 <th
                   key={col.key}
-                  className={`${thBase} ${col.sortable ? 'cursor-pointer hover:text-[var(--color-text)]' : ''} ${col.key === 'checkbox' ? '!px-1 text-center' : ''}`}
+                  style={pinnedStyle(columnWidths, colIndex)}
+                  className={`${thBase} ${col.pinned ? 'bg-[var(--color-header)]' : ''} ${col.sortable ? 'cursor-pointer hover:text-[var(--color-text)]' : ''} ${col.key === 'checkbox' ? '!px-1 text-center' : ''}`}
                   onClick={() => {
                     if (col.sortKey) onSort(col.sortKey);
                   }}
@@ -244,16 +287,18 @@ export function AlertTable({ alerts, selectedAlertId, onSelectAlert, sortBy, sor
               const isSelected = alert.id === selectedAlertId;
               const isResolved = alert.status === 'Resolved';
               const isChecked = checkedIds.has(alert.id);
+              const highlighted = isChecked || isSelected;
+              // Pinned cells are sticky, so they need an opaque background.
+              const pinnedBg = highlighted ? 'bg-[var(--color-hover)]' : 'bg-[var(--color-surface)] group-hover:bg-[var(--color-hover)]';
+              const rowBg = highlighted ? 'bg-accent/10' : 'bg-[var(--color-surface)] group-hover:bg-[var(--color-hover)]';
 
               return (
                 <tr
                   key={alert.id}
                   onClick={() => onSelectAlert(alert)}
-                  className={`cursor-pointer border-b border-[var(--color-border)] transition-colors ${
-                    isChecked ? 'bg-accent/10' : isSelected ? 'bg-accent/5' : 'bg-[var(--color-surface)] hover:bg-[var(--color-hover)]'
-                  } ${isResolved ? 'opacity-70' : ''}`}
+                  className={`group cursor-pointer border-b border-[var(--color-border)] transition-colors ${isResolved ? 'opacity-70' : ''}`}
                 >
-                  <td className={`${tdBase} !px-1 text-center`}>
+                  <td style={pinnedStyle(columnWidths, 0)} className={`${tdBase} ${pinnedBg} !px-1 text-center ${isSelected ? 'shadow-[inset_3px_0_0_0_#2563eb]' : ''}`}>
                     <input
                       type="checkbox"
                       checked={isChecked}
@@ -265,7 +310,11 @@ export function AlertTable({ alerts, selectedAlertId, onSelectAlert, sortBy, sor
                     />
                   </td>
 
-                  <td className={tdBase}>
+                  <td style={pinnedStyle(columnWidths, 1)} className={`${tdBase} ${pinnedBg} font-medium text-[var(--color-text)]`} title={alert.resourceIds[0]}>
+                    {shortenResourceId(alert.resourceIds[0])}
+                  </td>
+
+                  <td style={pinnedStyle(columnWidths, 2)} className={`${tdBase} ${pinnedBg}`}>
                     <div className="flex items-center gap-1">
                       <SeverityIndicator severity={alert.severity} status={alert.status} />
                       {alert.isSimulated && (
@@ -274,29 +323,25 @@ export function AlertTable({ alerts, selectedAlertId, onSelectAlert, sortBy, sor
                     </div>
                   </td>
 
-                  <td className={`${tdBase} text-xs`}>
+                  <td className={`${tdBase} ${rowBg} text-xs`}>
                     <AgentCell alertId={alert.id} />
                   </td>
 
-                  <td className={`${tdBase} text-[var(--color-text-secondary)]`}>{formatReportedAt(alert.firedAt)}</td>
+                  <td className={`${tdBase} ${rowBg} text-[var(--color-text-secondary)]`}>{formatReportedAt(alert.firedAt)}</td>
 
-                  <td className={tdBase}>
+                  <td className={`${tdBase} ${rowBg}`}>
                     <LagBadge lagMs={alert.lagMs} />
                   </td>
 
-                  <td className={`${tdBase} font-medium text-[var(--color-text)]`} title={alert.resourceIds[0]}>
-                    {shortenResourceId(alert.resourceIds[0])}
-                  </td>
+                  <td className={`${tdBase} ${rowBg} text-[var(--color-text-secondary)]`}>{alert.metricName ?? '—'}</td>
 
-                  <td className={`${tdBase} text-[var(--color-text-secondary)]`}>{alert.metricName ?? '—'}</td>
+                  <td className={`${tdBase} ${rowBg} font-mono text-xs text-[var(--color-text)]`}>{alert.metricValue ?? '—'}</td>
 
-                  <td className={`${tdBase} font-mono text-xs text-[var(--color-text)]`}>{alert.metricValue ?? '—'}</td>
-
-                  <td className={`${tdBase} text-[var(--color-text-secondary)]`} title={alert.ruleName}>
+                  <td className={`${tdBase} ${rowBg} text-[var(--color-text-secondary)]`} title={alert.ruleName}>
                     {alert.ruleName}
                   </td>
 
-                  <td className={`${tdBase} font-mono text-xs text-[var(--color-text-secondary)]`}>
+                  <td className={`${tdBase} ${rowBg} font-mono text-xs text-[var(--color-text-secondary)]`}>
                     {alert.threshold !== undefined && alert.threshold !== null ? `> ${alert.threshold}` : '—'}
                   </td>
                 </tr>
@@ -309,10 +354,18 @@ export function AlertTable({ alerts, selectedAlertId, onSelectAlert, sortBy, sor
       <div className="flex flex-shrink-0 items-center justify-between border-t border-[var(--color-border)] bg-[var(--color-header)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)]">
         <span>{alerts.length === totalCount ? `${totalCount} Alerts` : `${alerts.length} of ${totalCount} Filtered Alerts (${totalCount} Total)`}</span>
         <span className="flex items-center gap-3 text-[var(--color-text-tertiary)]">
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sev-critical" /> immediate</span>
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sev-error" /> soon</span>
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sev-warning" /> planned</span>
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sev-info" /> informational</span>
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-sev-critical" /> immediate
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-sev-error" /> soon
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-sev-warning" /> planned
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-sev-info" /> informational
+          </span>
         </span>
       </div>
     </div>

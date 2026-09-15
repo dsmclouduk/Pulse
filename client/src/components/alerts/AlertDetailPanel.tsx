@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { AlertCommentsTab } from '@/components/alerts/AlertCommentsTab';
 import { AlertMetricsTab } from '@/components/alerts/AlertMetricsTab';
@@ -10,15 +10,13 @@ import { useAlertComments, useAlertEnrichment, useLatestDiagnosis } from '@/cont
 import { formatAbsoluteTime, formatRelativeTime, shortenResourceId } from '@/lib/alerts';
 import type { AlertEvent } from '@/types';
 
-type Tab = 'overview' | 'metrics' | 'diagnosis';
+export type DetailTab = 'overview' | 'metrics' | 'diagnosis';
 
 interface AlertDetailPanelProps {
-  alert: AlertEvent | null;
+  alert: AlertEvent;
   /** Tab to open when a new alert is selected (deep links). Defaults to overview. */
-  initialTab?: Tab;
+  initialTab?: DetailTab;
   onClose: () => void;
-  height: number;
-  onHeightChange: (height: number) => void;
   onRefire?: (alert: AlertEvent) => void;
 }
 
@@ -73,7 +71,7 @@ function OverviewTab({ alert }: Readonly<{ alert: AlertEvent }>) {
   return (
     <div className="flex flex-col">
       <AgentSummaryStrip alert={alert} />
-      <div className="flex flex-col gap-4 p-3 lg:flex-row lg:gap-6">
+      <div className="flex flex-col gap-4 p-3 xl:flex-row xl:gap-6">
         <table className="min-w-0 flex-1 border-collapse text-sm">
           <tbody>
             <DetailRow label="Datapoint" value={alert.metricName} />
@@ -107,21 +105,20 @@ function OverviewTab({ alert }: Readonly<{ alert: AlertEvent }>) {
   );
 }
 
-export function AlertDetailPanel({ alert, initialTab, onClose, height, onHeightChange, onRefire }: Readonly<AlertDetailPanelProps>) {
-  const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'overview');
-  const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
-  const enrichment = useAlertEnrichment(alert?.id);
-  const comments = useAlertComments(alert?.id);
+/**
+ * Right-hand flyout for the selected alert. The parent positions it so its left edge aligns with
+ * the end of the pinned Resource + Severity columns, so rows stay clickable while it is open.
+ */
+export function AlertDetailPanel({ alert, initialTab, onClose, onRefire }: Readonly<AlertDetailPanelProps>) {
+  const [activeTab, setActiveTab] = useState<DetailTab>(initialTab ?? 'overview');
+  const enrichment = useAlertEnrichment(alert.id);
+  const comments = useAlertComments(alert.id);
   const lastAlertIdRef = useRef<string | null>(null);
-  const lastInitialTabRef = useRef<Tab | undefined>(undefined);
+  const lastInitialTabRef = useRef<DetailTab | undefined>(undefined);
 
   // Reset the tab when a different alert is opened, and honour a deep-linked tab even if the
   // alert data arrived before the deep link was parsed.
   useEffect(() => {
-    if (!alert) {
-      return;
-    }
-
     if (alert.id !== lastAlertIdRef.current) {
       lastAlertIdRef.current = alert.id;
       setActiveTab(initialTab ?? 'overview');
@@ -130,110 +127,96 @@ export function AlertDetailPanel({ alert, initialTab, onClose, height, onHeightC
     }
 
     lastInitialTabRef.current = initialTab;
-  }, [alert, initialTab]);
+  }, [alert.id, initialTab]);
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      dragRef.current = { startY: e.clientY, startHeight: height };
-
-      function handleMouseMove(moveEvent: MouseEvent) {
-        if (!dragRef.current) return;
-        const delta = dragRef.current.startY - moveEvent.clientY;
-        const newHeight = Math.max(160, Math.min(dragRef.current.startHeight + delta, window.innerHeight * 0.8));
-        onHeightChange(newHeight);
+  // Escape closes the flyout.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose();
       }
+    }
 
-      function handleMouseUp() {
-        dragRef.current = null;
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    },
-    [height, onHeightChange]
-  );
-
-  if (!alert) return null;
-
-  const diagnosisCount = comments.length;
-
-  const tabs: Array<{ id: Tab; label: string; badge?: number }> = [
+  const tabs: Array<{ id: DetailTab; label: string; badge?: number }> = [
     { id: 'overview', label: 'Overview' },
     { id: 'metrics', label: 'Metrics' },
-    { id: 'diagnosis', label: 'Diagnosis', badge: diagnosisCount }
+    { id: 'diagnosis', label: 'Diagnosis', badge: comments.length }
   ];
 
   return (
-    <div className="flex flex-col border-t border-[var(--color-border)] bg-[var(--color-surface)]" style={{ height }}>
-      {/* Drag handle */}
-      <div
-        role="separator"
-        tabIndex={0}
-        className="flex h-1.5 cursor-row-resize items-center justify-center hover:bg-accent/20"
-        onMouseDown={handleMouseDown}
-      >
-        <div className="h-0.5 w-8 rounded-full bg-[var(--color-text-tertiary)]" />
-      </div>
-
-      {/* Header bar */}
-      <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-1.5">
-        <SeverityIndicator severity={alert.severity} status={alert.status} />
-        <span className="hidden max-w-[220px] truncate text-xs font-medium text-[var(--color-text)] md:inline" title={alert.ruleName}>
-          {alert.ruleName}
-        </span>
-        <LagBadge lagMs={alert.lagMs} />
-        <EnrichmentStatePill status={enrichment} />
-        {alert.isSimulated && <Badge tone="neutral">SIM</Badge>}
-        <span className="hidden text-xs text-[var(--color-text-tertiary)] lg:inline">{formatAbsoluteTime(alert.firedAt)}</span>
-
-        <div className="flex-1" />
-
-        {alert.isSimulated && onRefire && (
-          <Button size="sm" variant="ghost" onClick={() => onRefire(alert)} title="Fire this simulated alert again as a new alert">
-            Re-fire
-          </Button>
-        )}
-
-        {/* Tabs */}
-        <div className="flex items-center">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1 px-3 py-1 text-xs font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'border-b-2 border-accent text-accent'
-                  : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'
-              }`}
-            >
-              {tab.label}
-              {tab.badge !== undefined && tab.badge > 0 && (
-                <span className="rounded-full bg-[var(--color-header)] px-1.5 text-[10px] text-[var(--color-text-secondary)]">{tab.badge}</span>
-              )}
-            </button>
-          ))}
+    <aside
+      className="flex h-full flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.35)]"
+      aria-label="Alert detail"
+    >
+      {/* Title row */}
+      <div className="flex items-start gap-3 border-b border-[var(--color-border)] px-4 pb-2 pt-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <SeverityIndicator severity={alert.severity} status={alert.status} />
+            <h2 className="truncate text-sm font-semibold text-[var(--color-text)]" title={alert.ruleName}>
+              {alert.ruleName}
+            </h2>
+            {alert.isSimulated && <Badge tone="neutral">SIM</Badge>}
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-secondary)]">
+            <span className="font-medium text-[var(--color-text)]" title={alert.resourceIds[0]}>
+              {shortenResourceId(alert.resourceIds[0])}
+            </span>
+            <span className="text-[var(--color-text-tertiary)]">·</span>
+            <span title={formatAbsoluteTime(alert.firedAt)}>fired {formatRelativeTime(alert.firedAt)}</span>
+            <LagBadge lagMs={alert.lagMs} withLabel />
+            <EnrichmentStatePill status={enrichment} />
+          </div>
         </div>
 
-        <button
-          onClick={onClose}
-          className="rounded p-1 text-[var(--color-text-secondary)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
-          title="Close"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M3 3l8 8M11 3 3 11" />
-          </svg>
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          {alert.isSimulated && onRefire && (
+            <Button size="sm" variant="ghost" onClick={() => onRefire(alert)} title="Fire this simulated alert again as a new alert">
+              Re-fire
+            </Button>
+          )}
+          <button
+            onClick={onClose}
+            className="rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
+            title="Close (Esc)"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M3 3l8 8M11 3 3 11" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center border-b border-[var(--color-border)] px-2">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
+              activeTab === tab.id
+                ? 'border-accent text-accent'
+                : 'border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            {tab.label}
+            {tab.badge !== undefined && tab.badge > 0 && (
+              <span className="rounded-full bg-[var(--color-header)] px-1.5 text-[10px] text-[var(--color-text-secondary)]">{tab.badge}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto">
         {activeTab === 'overview' && <OverviewTab alert={alert} />}
         {activeTab === 'metrics' && <AlertMetricsTab alert={alert} />}
         {activeTab === 'diagnosis' && <AlertCommentsTab alert={alert} />}
       </div>
-    </div>
+    </aside>
   );
 }
