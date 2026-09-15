@@ -29,5 +29,10 @@ if (env.APP_SERVICE_URL !== url) {
 }
 
 console.log(`ngrok http ${port} --url ${url}`);
-const child = spawn('ngrok', ['http', port, '--url', url], { stdio: 'inherit', shell: process.platform === 'win32' });
+// No shell: Windows resolves ngrok.exe from PATH on its own, and args stay properly separated.
+const child = spawn('ngrok', ['http', port, '--url', url], { stdio: 'inherit' });
+child.on('error', (error) => {
+  console.error(error.code === 'ENOENT' ? 'ngrok not found on PATH. Install it from https://ngrok.com/download.' : error.message);
+  process.exit(1);
+});
 child.on('exit', (code) => process.exit(code ?? 0));
