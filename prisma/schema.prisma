@@ -207,6 +207,7 @@ model AlertEnrichment {
   message            String?          @db.NVarChar(Max)
   trendJson          String?          @db.NVarChar(Max)
   historyJson        String?          @db.NVarChar(Max)
+  diagnosisCommentId String?
   startedAt          DateTime
   completedAt        DateTime?
   updatedAt          DateTime         @updatedAt

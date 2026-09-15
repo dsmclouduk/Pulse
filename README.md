@@ -61,7 +61,18 @@ Current schema scope in [prisma/schema.prisma](prisma/schema.prisma):
 - persisted alert event records
 - dashboards and widgets
 
-This is the first persistence layer for the MSP pivot. The runtime alert pipeline is still using the in-memory store until the next refactor moves ingestion and queries onto Prisma.
+Alerts, comments and enrichment runs are written through Prisma when `DATABASE_URL` is set and the alert belongs to a client account; everything else stays in the in-memory store (capped at 500 alerts).
+
+Local database (SQL Server 2022 in Docker, host port 14330 because a local SQL Server service often owns 1433):
+
+```bash
+npm run db:local            # docker compose up -d db
+# .env
+DATABASE_URL="sqlserver://localhost:14330;database=Pulse;user=sa;password=Pulse_Dev_Passw0rd!;encrypt=true;trustServerCertificate=true"
+npm run db:push && npm run db:generate   # stop the dev server first: generate has to replace the query engine DLL it holds open
+```
+
+Create a client account (Settings → Clients, or `POST /api/admin/clients`) and fire a simulate with its `clientSlug`; the alert, its diagnosis comment and the enrichment run are then in `AlertEventRecord`, `AlertComment` and `AlertEnrichment` and come back after a restart.
 
 ## Azure hosting assumptions
 

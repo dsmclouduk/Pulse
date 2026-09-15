@@ -7,6 +7,7 @@ import express from 'express';
 import { adminRouter } from './routes/admin.js';
 import { alertEnrichmentRouter } from './routes/alertEnrichment.js';
 import { authRouter } from './routes/auth.js';
+import { hydrateEnrichmentStore } from './lib/enrichment/enrichmentStatusStore.js';
 import { startMetricsPolling } from './lib/metricsService.js';
 import { alertsRouter } from './routes/alerts.js';
 import { metricsRouter } from './routes/metrics.js';
@@ -53,4 +54,13 @@ app.use('/api/simulate', simulateRouter);
 app.listen(port, () => {
   console.log(`[${new Date().toISOString()}] [server] Listening on http://localhost:${port}`);
   startMetricsPolling();
+  hydrateEnrichmentStore()
+    .then((count) => {
+      if (count > 0) {
+        console.log(`[${new Date().toISOString()}] [enrichment] restored ${count} persisted enrichment run(s)`);
+      }
+    })
+    .catch((error: unknown) => {
+      console.error(`[${new Date().toISOString()}] [enrichment] restore failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
 });

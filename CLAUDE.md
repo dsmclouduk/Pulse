@@ -81,7 +81,8 @@ README.md        Setup and ngrok instructions
 | `server/src/lib/analysis/trendAnalysis.ts` | Pure trend maths: slope, r², deltas, projection, rapid-fill vs steady-growth, urgency |
 | `server/src/lib/metrics/*Provider.ts` | Metric history providers: synthetic (offline demo), ARM metrics, Log Analytics KQL |
 | `server/src/lib/agent/*` | Agent providers (Anthropic structured output, rule-based fallback), prompt builder, comment renderer |
-| `server/src/lib/comments/commentRepository.ts` | Alert comments (memory now, Prisma `AlertComment` when `DATABASE_URL` is set) |
+| `server/src/lib/comments/commentRepository.ts` | Alert comments: Prisma `AlertComment` when `DATABASE_URL` is set and the alert belongs to a client account, otherwise memory |
+| `server/src/lib/enrichment/enrichmentRepository.ts` | Finished enrichment runs (status, trend, history) in Prisma `AlertEnrichment`; replayed into the status store at startup |
 | `server/src/routes/alertEnrichment.ts` | `/api/alerts/comments*` and `/api/alerts/enrichment*` endpoints |
 | `server/src/lib/simulation/scenarios.ts` | Simulate presets (disk steady growth, rapid fill, flat, CPU sawtooth, memory leak) |
 | `docs/onboarding/DECISIONS.md` | Access model (Lighthouse), read-only vs write posture, webhook token, DCR and alert-rule decisions |
@@ -174,6 +175,9 @@ After `broadcast`, `processAlert.ts` calls `scheduleEnrichment` and never awaits
 Alert IDs are ARM paths, so comment/enrichment endpoints take `alertId` as a query parameter or JSON body field, never a path segment.
 Resolved alerts get a short `status` note instead of a diagnosis. Real alerts have a 15-minute cooldown; simulated alerts and `/enrichment/rerun` bypass it.
 Anything from the alert payload (rule name, description) is untrusted and is sanitised and wrapped as data in the prompt.
+Persistence rule (alerts, comments, enrichment): a row is written only when `DATABASE_URL` is set **and** the alert resolved to a client
+account (via `clientSlug` on simulate or the client webhook secret in the URL). Unscoped alerts live in memory only and vanish on restart.
+Enrichment persists terminal states only (complete / failed / skipped); `hydrateEnrichmentStore()` reloads the latest 200 at startup.
 
 ---
 

@@ -1,5 +1,6 @@
 import type { AlertEnrichmentStatus, MetricHistoryResult } from '../../../../shared/types.js';
 import { broadcastEnrichment } from '../sseRegistry.js';
+import { isTerminalState, loadRecentEnrichments, persistEnrichment } from './enrichmentRepository.js';
 
 const MAX_TRACKED_ALERTS = 200;
 
@@ -25,12 +26,47 @@ export function getStatus(alertId: string): AlertEnrichmentStatus | undefined {
   return statusByAlert.get(alertId);
 }
 
-/** Stores the status, then broadcasts it to SSE clients in the alert's scope. */
+/**
+ * Stores the status, then broadcasts it to SSE clients in the alert's scope. Terminal states
+ * (complete / failed / skipped) are also written to the database, fire-and-forget, when the alert
+ * belongs to a persisted client account.
+ */
 export function setStatus(status: AlertEnrichmentStatus): AlertEnrichmentStatus {
   const stamped: AlertEnrichmentStatus = { ...status, updatedAt: new Date().toISOString() };
   touch(statusByAlert, status.alertId, stamped);
   broadcastEnrichment(stamped);
+
+  if (isTerminalState(stamped.state)) {
+    void persistEnrichment(stamped, getHistory(stamped.alertId)).catch((error: unknown) => {
+      console.error(
+        `[${new Date().toISOString()}] [enrichment] persist failed alert=${stamped.alertId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    });
+  }
+
   return stamped;
+}
+
+/**
+ * Replays persisted runs into the in-memory store at startup (no SSE broadcast). Returns how many
+ * were loaded. Completion times are restored too, so the real-alert cooldown survives a restart.
+ */
+export async function hydrateEnrichmentStore(): Promise<number> {
+  const stored = await loadRecentEnrichments(MAX_TRACKED_ALERTS);
+
+  for (const { status, history } of stored) {
+    touch(statusByAlert, status.alertId, status);
+
+    if (history.length > 0) {
+      touch(historyByAlert, status.alertId, history);
+    }
+
+    if (status.completedAt) {
+      touch(completedAt, status.alertId, new Date(status.completedAt).getTime());
+    }
+  }
+
+  return stored.length;
 }
 
 export function isInflight(alertId: string): boolean {
