@@ -7,6 +7,7 @@ Pulse is a webhook-first Azure monitoring portal built to replace LogicMonitor. 
 - Phase 1: Azure Common Alert Schema webhook receiver, in-memory alert store, SSE stream, alert listing endpoint, and simulation endpoint
 - Phase 2: React/Vite/Tailwind dashboard with live feed, lag badges, connection status, detail drawer, and simulation controls
 - Phase 3: Optional Azure metrics polling, server-side cache, and minimal drawer charts
+- Phase 3.5 (Demo 1): Alert enrichment. When an alert lands, Pulse pulls metric history for the resource (synthetic for simulated alerts, Log Analytics VM Insights for VM disk alerts, ARM metrics otherwise), runs a deterministic trend analysis (rapid fill vs steady growth, projection to full), and an in-app agent posts a diagnosis comment on the alert. The UI gained a Metrics tab (90-day chart with threshold, fired marker and projection), a Diagnosis tab (comment thread, re-run, operator notes), lag badges in the table, urgency dots, and a scenario-based Simulate page.
 
 ## Project layout
 
@@ -103,11 +104,21 @@ npm run dev --workspace client
 - `POST /api/webhook/azure-alerts`
   Accepts Azure Common Alert Schema payloads and requires the `x-webhook-secret` header.
 - `GET /api/alerts/stream`
-  SSE endpoint. Sends an immediate `init` payload, then `alert` events, plus `: ping` keepalives every 15 seconds.
+  SSE endpoint. Sends an immediate `init` payload, then `alert`, `comment` and `enrichment` events, plus `: ping` keepalives every 15 seconds.
 - `GET /api/alerts`
   Returns the current alert list as JSON. Supports optional `clientAccountId`, `clientSlug`, and `subscriptionId` filters.
+- `GET /api/alerts/comments?alertId=<id>` / `GET /api/alerts/comments/recent?limit=200`
+  Comments (agent diagnoses, operator notes, system status) for one alert, or the most recent across alerts. Alert IDs are ARM paths, so they travel as query parameters.
+- `POST /api/alerts/comments`
+  Body `{ alertId, body, authorName?, clientSlug? }`. Adds an operator note and broadcasts it over SSE.
+- `GET /api/alerts/enrichment?alertId=<id>`
+  Enrichment status, trend analysis, downsampled metric history and comments for an alert. `GET /api/alerts/enrichment/summary` lists all statuses.
+- `POST /api/alerts/enrichment/rerun`
+  Body `{ alertId, clientSlug? }`. Re-fetches history and asks the agent for a fresh diagnosis (202, or 409 while one is running).
+- `GET /api/simulate/scenarios`
+  Lists the simulation presets (disk steady growth, disk rapid fill, disk flat, CPU sawtooth, memory leak).
 - `POST /api/simulate/alert`
-  Dev-only helper that builds a valid Azure-style payload and sends it through the same normalization and broadcast path. Accepts optional `clientSlug` for tenant-scoped simulation.
+  Dev-only helper that builds a valid Azure-style payload and sends it through the same normalization, broadcast and enrichment path. Accepts `scenario`, `unique` (new alert id per fire), `firedAt` (simulate lag), `dimensions`, `syntheticHistory` and optional `clientSlug`.
 - `GET /api/metrics/context?resourceId=<resourceId>&metricName=<metricName>`
   Returns cached or freshly queried Azure Monitor metric context for a resource. If Azure credentials are not configured, the endpoint returns a disabled status instead of failing the app.
 - `GET /api/admin/platform-identity/validate`
@@ -137,6 +148,26 @@ Expected result:
 - `GET /api/alerts` returns the new alert at the top of the store.
 - The browser feed updates live over SSE.
 - The lag badge appears on the alert row and in the drawer.
+
+## Demo the enrichment pipeline offline
+
+No Azure credentials or LLM key are needed. Open the Simulate page, pick "Disk: steady growth (90 days)" and "Disk: rapid fill (6 hours)", fire both, then open each alert in the feed:
+
+- the Agent column shows the urgency the agent assigned (immediate / soon / planned / informational)
+- the Metrics tab shows the 90-day history with the threshold and fired markers and, for a steady trend, a dashed projection to 100%
+- the Diagnosis tab shows the agent's comment. Without `ANTHROPIC_API_KEY` it is the deterministic rule-based diagnosis, labelled as such; with a key the same template is filled by Claude using structured output
+
+Or from the shell:
+
+```bash
+curl -s -X POST http://localhost:3001/api/simulate/alert -H "Content-Type: application/json" \
+  -d '{"scenario":"disk-rapid-fill","resourceId":"/subscriptions/test/resourceGroups/prod/providers/Microsoft.Compute/virtualMachines/web-01","unique":true}'
+# then, with the returned id:
+curl -s "http://localhost:3001/api/alerts/enrichment?alertId=<id>"
+curl -s "http://localhost:3001/api/alerts/comments?alertId=<id>"
+```
+
+For real VM disk alerts, set `LOG_ANALYTICS_WORKSPACE_ID` (the workspace receiving VM Insights `InsightsMetrics`) alongside the Azure credentials; the service principal needs Log Analytics Reader. Other metric alerts use the ARM metrics API with the same credentials.
 
 ## Connect real Azure alerts with ngrok
 

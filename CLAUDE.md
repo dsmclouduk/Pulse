@@ -21,6 +21,7 @@ we do not poll for alerts.
 - [x] Phase 1 — Webhook pipeline + SSE + simulation endpoint
 - [x] Phase 2 — React frontend (live feed, lag measurement, simulate panel)
 - [x] Phase 3 — Azure Metrics polling (supplementary context charts)
+- [x] Phase 3.5 — Alert enrichment: metric history → trend analysis → agent diagnosis comments (Demo 1)
 - [ ] Phase 4 — Azure AD / Entra ID auth (MSAL)
 - [ ] Phase 5 — Multi-subscription scope selector
 
@@ -74,7 +75,18 @@ README.md        Setup and ngrok instructions
 | `server/src/routes/webhook.ts` | Receives real Azure webhook POSTs |
 | `server/src/routes/simulate.ts` | Simulation endpoint — same code path as real webhooks |
 | `server/src/routes/sse.ts` | SSE stream endpoint, sends init payload on connect |
-| `client/src/hooks/useAlertStream.ts` | SSE hook with auto-reconnect and alert upsert logic |
+| `server/src/lib/processAlert.ts` | Single ingestion pipeline (normalise → persist → broadcast → schedule enrichment) |
+| `server/src/lib/enrichment/enrichmentOrchestrator.ts` | Fire-and-forget enrichment: plan history → fetch → trend analysis → agent → diagnosis comment |
+| `server/src/lib/enrichment/metricRequestPlanner.ts` | Maps an alert to metric history requests (synthetic / ARM / Log Analytics) |
+| `server/src/lib/analysis/trendAnalysis.ts` | Pure trend maths: slope, r², deltas, projection, rapid-fill vs steady-growth, urgency |
+| `server/src/lib/metrics/*Provider.ts` | Metric history providers: synthetic (offline demo), ARM metrics, Log Analytics KQL |
+| `server/src/lib/agent/*` | Agent providers (Anthropic structured output, rule-based fallback), prompt builder, comment renderer |
+| `server/src/lib/comments/commentRepository.ts` | Alert comments (memory now, Prisma `AlertComment` when `DATABASE_URL` is set) |
+| `server/src/routes/alertEnrichment.ts` | `/api/alerts/comments*` and `/api/alerts/enrichment*` endpoints |
+| `server/src/lib/simulation/scenarios.ts` | Simulate presets (disk steady growth, rapid fill, flat, CPU sawtooth, memory leak) |
+| `client/src/hooks/useAlertStream.ts` | SSE hook with auto-reconnect; tracks alerts, comments and enrichment status |
+| `client/src/context/AlertDataContext.tsx` | Shares stream state; `useAlertComments`, `useAlertEnrichment`, `useLatestDiagnosis` |
+| `client/src/components/alerts/AlertDetailPanel.tsx` | Drawer with Overview / Metrics / Diagnosis tabs |
 
 ---
 
@@ -127,11 +139,31 @@ broadcast(event: AlertEvent): void
 ```
 
 Every route that creates or updates an AlertEvent must call broadcast.
-The SSE stream sends two event types:
+The SSE stream sends these event types:
 - `{ type: 'init', alerts: AlertEvent[] }` — sent once on client connect
 - `{ type: 'alert', alert: AlertEvent }` — sent on every new/updated alert
+- `{ type: 'comment', comment: AlertComment }` — agent diagnosis, operator note or system status added to an alert
+- `{ type: 'enrichment', enrichment: AlertEnrichmentStatus }` — enrichment state transitions (never includes history points)
 
-The client upserts by `alert.id` so Fired → Resolved transitions update the same row.
+The client upserts alerts by `alert.id` so Fired → Resolved transitions update the same row, upserts comments by
+`comment.id`, and seeds comments/enrichment on connect from `GET /api/alerts/comments/recent` and
+`GET /api/alerts/enrichment/summary`. Comments and enrichment payloads carry the alert's tenant scope so the
+same SSE filters apply (`matchesScope` in `sseRegistry.ts`).
+
+---
+
+## Alert Enrichment (Phase 3.5)
+
+After `broadcast`, `processAlert.ts` calls `scheduleEnrichment` and never awaits it. The orchestrator:
+1. plans metric history requests (`metricRequestPlanner.ts`): simulated → synthetic provider; VM disk metric → Log Analytics
+   `InsightsMetrics` (90 d daily + 7 d hourly); other metric alerts → ARM metrics (7 d hourly + 6 h 5-minute zoom)
+2. runs `analyseTrend` (pure) → pattern `rapid-fill | steady-growth | declining | volatile | flat | insufficient-data` and a suggested urgency
+3. asks the agent provider (Anthropic when `ANTHROPIC_API_KEY` is set, otherwise rule-based) for a diagnosis, falling back to rule-based on any LLM failure
+4. renders a fixed markdown template (trend numbers always come from our analysis, not the model) and posts a `diagnosis` comment
+
+Alert IDs are ARM paths, so comment/enrichment endpoints take `alertId` as a query parameter or JSON body field, never a path segment.
+Resolved alerts get a short `status` note instead of a diagnosis. Real alerts have a 15-minute cooldown; simulated alerts and `/enrichment/rerun` bypass it.
+Anything from the alert payload (rule name, description) is untrusted and is sanitised and wrapped as data in the prompt.
 
 ---
 
@@ -167,6 +199,16 @@ Copy `.env.example` to `.env` before running anything.
 | `AZURE_CLIENT_ID` | Phase 3+ | Not needed for Phase 1 or 2 |
 | `AZURE_CLIENT_SECRET` | Phase 3+ | Not needed for Phase 1 or 2 |
 | `AZURE_SUBSCRIPTION_IDS` | Phase 3+ | Comma-separated |
+| `LOG_ANALYTICS_WORKSPACE_ID` | Enrichment (disk history) | Workspace GUID; SP needs Log Analytics Reader; token audience `https://api.loganalytics.io/` |
+| `ANTHROPIC_API_KEY` | Enrichment (LLM) | Optional. Absent → rule-based diagnosis, clearly labelled |
+| `PULSE_AGENT_PROVIDER` | Enrichment | `auto` (default), `anthropic`, `rule-based` |
+| `PULSE_AGENT_MODEL` | Enrichment | Default `claude-opus-5` |
+| `PULSE_AGENT_TIMEOUT_MS` | Enrichment | Default 30000 |
+| `PULSE_ENRICHMENT_ENABLED` | Enrichment | Default true |
+| `PULSE_ENRICHMENT_TIMEOUT_MS` | Enrichment | Whole pipeline, default 60000 |
+| `PULSE_ENRICHMENT_COOLDOWN_MS` | Enrichment | Default 900000 (real alerts only) |
+| `PULSE_ENRICHMENT_ON_RESOLVED` | Enrichment | `note` (default) or `skip` |
+| `PULSE_HISTORY_DAYS` | Enrichment | Default 90 |
 | `NGROK_URL` | Dev reference | Reminder only, not consumed by app |
 
 ---
@@ -288,6 +330,7 @@ Always use `essentials.alertId` as the AlertEvent `id` for upsert matching.
 | 1 | Webhook receiver + SSE + simulation endpoint | In progress |
 | 2 | React frontend — live feed + lag display + simulate panel | Not started |
 | 3 | Azure Metrics API polling for chart context | Complete |
+| 3.5 | Alert enrichment: metric history, trend analysis, agent diagnosis comments | Complete (offline demo); real Log Analytics wiring needs creds |
 | 4 | Azure AD / Entra ID auth via MSAL | Not started |
 | 5 | Multi-subscription scope selector | Not started |
 | 6 | Alert acknowledgement (write back to Azure) | Not started |
