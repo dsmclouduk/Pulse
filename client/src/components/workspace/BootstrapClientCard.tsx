@@ -1,3 +1,4 @@
+import { Button, Card, CardHeader, Field, Input, Textarea } from '@/components/ui';
 import type { CreateClientAccountRequest } from '@/types';
 
 interface BootstrapClientCardProps {
@@ -9,64 +10,36 @@ interface BootstrapClientCardProps {
 
 export function BootstrapClientCard({ formState, isSubmitting, onChange, onSubmit }: Readonly<BootstrapClientCardProps>) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Bootstrap client</p>
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <label className="grid gap-2 text-sm text-slate-200 md:col-span-2">
-          <span>Client name</span>
-          <input
-            value={formState.name}
-            onChange={(event) => onChange({ ...formState, name: event.target.value })}
-            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition focus:border-cyan/50"
-          />
-        </label>
+    <Card>
+      <CardHeader eyebrow="Onboarding" title="Create a client account" description="Generates a per-client webhook secret so Azure alerts land in the right scope." />
 
-        <label className="grid gap-2 text-sm text-slate-200">
-          <span>Client slug</span>
-          <input
-            value={formState.slug}
-            onChange={(event) => onChange({ ...formState, slug: event.target.value })}
-            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 font-mono text-white outline-none transition focus:border-cyan/50"
-          />
-        </label>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label="Client name" className="md:col-span-2">
+          <Input value={formState.name} onChange={(event) => onChange({ ...formState, name: event.target.value })} />
+        </Field>
 
-        <label className="grid gap-2 text-sm text-slate-200">
-          <span>Primary tenant ID</span>
-          <input
-            value={formState.primaryTenantId ?? ''}
-            onChange={(event) => onChange({ ...formState, primaryTenantId: event.target.value })}
-            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 font-mono text-white outline-none transition focus:border-cyan/50"
-          />
-        </label>
+        <Field label="Client slug" hint="Lowercase, URL-safe">
+          <Input className="font-mono" value={formState.slug} onChange={(event) => onChange({ ...formState, slug: event.target.value })} />
+        </Field>
 
-        <label className="grid gap-2 text-sm text-slate-200">
-          <span>Default domain</span>
-          <input
-            value={formState.defaultDomain ?? ''}
-            onChange={(event) => onChange({ ...formState, defaultDomain: event.target.value })}
-            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition focus:border-cyan/50"
-          />
-        </label>
+        <Field label="Primary tenant ID">
+          <Input className="font-mono" value={formState.primaryTenantId ?? ''} onChange={(event) => onChange({ ...formState, primaryTenantId: event.target.value })} />
+        </Field>
 
-        <label className="grid gap-2 text-sm text-slate-200 md:col-span-2">
-          <span>Description</span>
-          <textarea
-            rows={3}
-            value={formState.description ?? ''}
-            onChange={(event) => onChange({ ...formState, description: event.target.value })}
-            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition focus:border-cyan/50"
-          />
-        </label>
+        <Field label="Default domain">
+          <Input value={formState.defaultDomain ?? ''} onChange={(event) => onChange({ ...formState, defaultDomain: event.target.value })} />
+        </Field>
+
+        <Field label="Description" className="md:col-span-2">
+          <Textarea rows={2} value={formState.description ?? ''} onChange={(event) => onChange({ ...formState, description: event.target.value })} />
+        </Field>
       </div>
 
-      <button
-        type="button"
-        disabled={isSubmitting}
-        onClick={onSubmit}
-        className="mt-4 rounded-full bg-cyan px-5 py-3 text-sm font-semibold text-ink transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        Create client account
-      </button>
-    </div>
+      <div className="mt-4">
+        <Button variant="primary" loading={isSubmitting} disabled={!formState.name || !formState.slug} onClick={() => void onSubmit()}>
+          Create client account
+        </Button>
+      </div>
+    </Card>
   );
 }

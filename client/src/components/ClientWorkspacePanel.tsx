@@ -15,6 +15,7 @@ import {
   defaultSubscriptionFormState,
   defaultTenantConnectionFormState
 } from '@/components/workspace/constants';
+import { EmptyState } from '@/components/ui';
 
 interface ClientWorkspacePanelProps {
   selectedClientSlug: string | null;
@@ -49,14 +50,6 @@ export function ClientWorkspacePanel({ selectedClientSlug, onSelectClientSlug }:
     }
   }, [clients, onSelectClientSlug, selectedClientSlug]);
 
-  async function handleRefreshClients(): Promise<void> {
-    await refreshClients();
-  }
-
-  async function handleValidatePlatformIdentity(): Promise<void> {
-    await validatePlatformIdentity();
-  }
-
   async function handleCreateClient(): Promise<void> {
     setIsSubmitting(true);
 
@@ -72,14 +65,11 @@ export function ClientWorkspacePanel({ selectedClientSlug, onSelectClientSlug }:
     }
 
     setLastConsentMessage(null);
-
     setIsSubmitting(false);
   }
 
   async function handleAddTenantConnection(): Promise<void> {
-    if (!selectedClient) {
-      return;
-    }
+    if (!selectedClient) return;
 
     setIsSubmitting(true);
 
@@ -93,14 +83,11 @@ export function ClientWorkspacePanel({ selectedClientSlug, onSelectClientSlug }:
     }
 
     setLastConsentMessage(null);
-
     setIsSubmitting(false);
   }
 
   async function handleAddSubscription(): Promise<void> {
-    if (!selectedClient) {
-      return;
-    }
+    if (!selectedClient) return;
 
     setIsSubmitting(true);
 
@@ -116,14 +103,11 @@ export function ClientWorkspacePanel({ selectedClientSlug, onSelectClientSlug }:
     }
 
     setLastConsentMessage(null);
-
     setIsSubmitting(false);
   }
 
   async function handleStartTenantConsent(tenantConnectionId: string): Promise<void> {
-    if (!selectedClient) {
-      return;
-    }
+    if (!selectedClient) return;
 
     setIsSubmitting(true);
 
@@ -134,14 +118,11 @@ export function ClientWorkspacePanel({ selectedClientSlug, onSelectClientSlug }:
     }
 
     setLastConsentMessage(result?.action.message ?? null);
-
     setIsSubmitting(false);
   }
 
   async function handleValidateTenantConnection(tenantConnectionId: string): Promise<void> {
-    if (!selectedClient) {
-      return;
-    }
+    if (!selectedClient) return;
 
     setIsSubmitting(true);
 
@@ -152,54 +133,47 @@ export function ClientWorkspacePanel({ selectedClientSlug, onSelectClientSlug }:
   }
 
   return (
-    <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-panel">
-      <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <ClientScopeCard
-          clients={clients}
-          selectedClientSlug={selectedClientSlug}
-          onSelectClientSlug={onSelectClientSlug}
-          platformIdentity={platformIdentity}
-          platformValidation={platformValidation}
-          onRefreshClients={handleRefreshClients}
-          onValidatePlatformIdentity={handleValidatePlatformIdentity}
-          errorMessage={errorMessage}
-        />
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <ClientScopeCard
+        clients={clients}
+        selectedClientSlug={selectedClientSlug}
+        onSelectClientSlug={onSelectClientSlug}
+        platformIdentity={platformIdentity}
+        platformValidation={platformValidation}
+        onRefreshClients={refreshClients}
+        onValidatePlatformIdentity={validatePlatformIdentity}
+        errorMessage={errorMessage}
+      />
 
-        <div className="grid gap-4">
-          <BootstrapClientCard
-            formState={formState}
-            isSubmitting={isSubmitting}
-            onChange={setFormState}
-            onSubmit={handleCreateClient}
-          />
+      <div className="grid content-start gap-4">
+        <BootstrapClientCard formState={formState} isSubmitting={isSubmitting} onChange={setFormState} onSubmit={handleCreateClient} />
 
-          <div className="grid gap-3">
-            {clients.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-slate-400">
-                No client accounts found yet. Create the first onboarded client to enable a scoped live feed.
-              </div>
-            ) : (
-              clients.map((client) => <ClientSummaryCard key={client.id} client={client} />)
-            )}
-          </div>
-
-          {selectedClient ? (
-            <SelectedClientCard
-              client={selectedClient}
-              tenantConnectionFormState={tenantConnectionFormState}
-              subscriptionFormState={subscriptionFormState}
-              isSubmitting={isSubmitting}
-              lastConsentMessage={lastConsentMessage}
-              onTenantConnectionChange={setTenantConnectionFormState}
-              onSubscriptionChange={setSubscriptionFormState}
-              onAddTenantConnection={handleAddTenantConnection}
-              onAddSubscription={handleAddSubscription}
-              onStartTenantConsent={handleStartTenantConsent}
-              onValidateTenantConnection={handleValidateTenantConnection}
-            />
-          ) : null}
+        <div className="grid gap-3 md:grid-cols-2">
+          {clients.length === 0 ? (
+            <EmptyState className="md:col-span-2">No client accounts yet. Create the first onboarded client to enable a scoped live feed.</EmptyState>
+          ) : (
+            clients.map((client) => (
+              <ClientSummaryCard key={client.id} client={client} selected={client.slug === selectedClientSlug} onSelect={() => onSelectClientSlug(client.slug)} />
+            ))
+          )}
         </div>
+
+        {selectedClient ? (
+          <SelectedClientCard
+            client={selectedClient}
+            tenantConnectionFormState={tenantConnectionFormState}
+            subscriptionFormState={subscriptionFormState}
+            isSubmitting={isSubmitting}
+            lastConsentMessage={lastConsentMessage}
+            onTenantConnectionChange={setTenantConnectionFormState}
+            onSubscriptionChange={setSubscriptionFormState}
+            onAddTenantConnection={handleAddTenantConnection}
+            onAddSubscription={handleAddSubscription}
+            onStartTenantConsent={handleStartTenantConsent}
+            onValidateTenantConnection={handleValidateTenantConnection}
+          />
+        ) : null}
       </div>
-    </section>
+    </div>
   );
 }

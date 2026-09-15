@@ -17,16 +17,17 @@ export function formatLag(lagMs: number): string {
   return `${(lagMs / 1000).toFixed(1)}s`;
 }
 
+/** Lag badge colours per CLAUDE.md: green < 5 s, amber 5–30 s, red > 30 s. Theme-neutral tokens. */
 export function getLagTone(lagMs: number): string {
   if (lagMs < 5000) {
-    return 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200';
+    return 'border-sev-ok/40 bg-sev-ok/10 text-sev-ok';
   }
 
   if (lagMs <= 30000) {
-    return 'border-amber-400/40 bg-amber-500/10 text-amber-100';
+    return 'border-sev-warning/50 bg-sev-warning/15 text-yellow-700 dark:text-sev-warning';
   }
 
-  return 'border-rose-400/40 bg-rose-500/10 text-rose-100';
+  return 'border-sev-critical/40 bg-sev-critical/10 text-sev-critical';
 }
 
 export function getSeverityTone(severity: AlertSeverity, status: AlertEvent['status']): string {

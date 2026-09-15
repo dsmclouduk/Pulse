@@ -1,6 +1,6 @@
 import type { AlertEvent, AlertSeverity, AlertStatus, SignalType } from '@/types';
 
-export type SortField = 'severity' | 'reportedAt' | 'resource' | 'datapoint' | 'alertValue' | 'threshold' | 'alertRule';
+export type SortField = 'severity' | 'reportedAt' | 'lag' | 'resource' | 'datapoint' | 'alertValue' | 'threshold' | 'alertRule';
 
 export interface AlertFilters {
   searchText: string;
@@ -75,6 +75,8 @@ function getSortValue(alert: AlertEvent, field: SortField): string | number {
       return SEVERITY_WEIGHT[alert.severity];
     case 'reportedAt':
       return new Date(alert.firedAt).getTime();
+    case 'lag':
+      return alert.lagMs;
     case 'resource':
       return alert.resourceIds[0]?.toLowerCase() ?? '';
     case 'datapoint':

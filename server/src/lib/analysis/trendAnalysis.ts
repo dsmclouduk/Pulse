@@ -247,15 +247,22 @@ export function analyseTrend(series: MetricSeries, options: TrendOptions = {}): 
   const scale = ceiling ? ceiling / 100 : 1;
   const t = TREND_THRESHOLDS;
 
+  // A rapid fill must take the metric into new territory. A sawtooth that swings back to a
+  // previous peak is volatility, not a fill, even though its 24 h delta is large.
+  const priorPoints = points.filter((point) => point.t < nowT - 24 * HOUR_MS);
+  const priorMax = priorPoints.length > 0 ? Math.max(...priorPoints.map((point) => point.v)) : null;
+  const isNewHigh = priorMax === null || last > priorMax + 0.5 * scale;
+
   let pattern: TrendPattern;
 
   if (
-    (delta6h !== null && delta6h >= t.rapidFillDelta6h * scale) ||
-    (delta24h !== null && delta24h >= t.rapidFillDelta24h * scale) ||
-    (delta24h !== null &&
-      delta24h >= t.rapidFillDelta24hMin * scale &&
-      recentRatePerDay !== null &&
-      recentRatePerDay >= t.rapidFillRecentRateMultiplier * Math.max(Math.abs(slope), 0.05 * scale))
+    isNewHigh &&
+    ((delta6h !== null && delta6h >= t.rapidFillDelta6h * scale) ||
+      (delta24h !== null && delta24h >= t.rapidFillDelta24h * scale) ||
+      (delta24h !== null &&
+        delta24h >= t.rapidFillDelta24hMin * scale &&
+        recentRatePerDay !== null &&
+        recentRatePerDay >= t.rapidFillRecentRateMultiplier * Math.max(Math.abs(slope), 0.05 * scale)))
   ) {
     pattern = 'rapid-fill';
   } else if (slope >= t.steadySlopePerDay * scale && rSquared >= t.steadyRSquared) {

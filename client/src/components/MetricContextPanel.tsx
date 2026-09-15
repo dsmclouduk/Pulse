@@ -1,13 +1,6 @@
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
-} from 'recharts';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
+import { Card, CardHeader, Notice, Spinner } from '@/components/ui';
 import { useResourceMetrics } from '@/hooks/useResourceMetrics';
 import type { MetricAggregation, MetricSeries } from '@/types';
 
@@ -50,7 +43,7 @@ function formatMetricValue(value: number | undefined, unit: string): string {
     return `${value.toFixed(0)} ms`;
   }
 
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
+  return new Intl.NumberFormat('en-GB', { maximumFractionDigits: 2 }).format(value);
 }
 
 function formatTick(timestamp: string): string {
@@ -63,52 +56,41 @@ function MetricCard({ series }: Readonly<{ series: MetricSeries }>) {
   const latestValue = latestPoint?.[fieldName] as number | undefined;
 
   return (
-    <article className="rounded-2xl border border-white/10 bg-black/20 p-4">
+    <article className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-3">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-white">{series.displayName}</p>
-          <p className="mt-1 text-xs text-slate-400">{series.aggregation} over the last 6 hours</p>
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold text-[var(--color-text)]">{series.displayName}</p>
+          <p className="text-[11px] text-[var(--color-text-secondary)]">{series.aggregation} · last 6 hours · 5 min grain</p>
         </div>
-        <p className="font-mono text-sm text-slate-200">{formatMetricValue(latestValue, series.unit)}</p>
+        <p className="font-mono text-sm font-semibold text-[var(--color-text)]">{formatMetricValue(latestValue, series.unit)}</p>
       </div>
 
-      <div className="mt-4 h-36">
+      <div className="mt-2 h-32">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={series.points} margin={{ top: 8, right: 8, bottom: 0, left: -24 }}>
-            <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-            <XAxis
-              dataKey="timestamp"
-              tickFormatter={formatTick}
-              tick={{ fill: '#94a3b8', fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
+          <LineChart data={series.points} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+            <CartesianGrid stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="timestamp" tickFormatter={formatTick} tick={{ fill: 'var(--color-text-tertiary)', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={32} />
+            <YAxis tick={{ fill: 'var(--color-text-tertiary)', fontSize: 10 }} axisLine={false} tickLine={false} width={44} />
             <Tooltip
               contentStyle={{
-                background: '#0f1419',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '12px',
-                color: '#e2e8f0'
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: '6px',
+                color: 'var(--color-text)',
+                fontSize: 12
               }}
-              labelFormatter={(label) => new Date(label).toLocaleString()}
+              labelFormatter={(label) => new Date(label).toLocaleString('en-GB')}
               formatter={(value: number) => formatMetricValue(value, series.unit)}
             />
-            <Line
-              type="monotone"
-              dataKey={fieldName}
-              stroke="#74d3ff"
-              strokeWidth={2}
-              dot={false}
-              connectNulls
-              isAnimationActive={false}
-            />
+            <Line type="monotone" dataKey={fieldName} stroke="#2563eb" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
       {series.errorCode && series.errorCode !== 'Success' ? (
-        <p className="mt-3 text-xs text-amber-300">{series.errorMessage ?? `Metric query returned ${series.errorCode}.`}</p>
+        <Notice tone="warning" className="mt-2">
+          {series.errorMessage ?? `Metric query returned ${series.errorCode}.`}
+        </Notice>
       ) : null}
     </article>
   );
@@ -118,30 +100,31 @@ export function MetricContextPanel({ resourceId, metricName }: Readonly<MetricCo
   const { context, isLoading } = useResourceMetrics({ resourceId, metricName });
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/5 p-5">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Metric context</p>
-          <p className="mt-2 text-sm text-slate-300">Supplementary Azure Monitor polling. Alert delivery remains webhook-first.</p>
-        </div>
-        {context?.fetchedAt ? <p className="text-xs text-slate-500">Updated {new Date(context.fetchedAt).toLocaleTimeString()}</p> : null}
-      </div>
+    <Card>
+      <CardHeader
+        eyebrow="Azure Monitor"
+        title="Live resource metrics"
+        description="Supplementary polling for context. Alert delivery stays webhook-first."
+        actions={context?.fetchedAt ? <span className="text-[11px] text-[var(--color-text-tertiary)]">Updated {new Date(context.fetchedAt).toLocaleTimeString()}</span> : undefined}
+      />
 
-      {!resourceId ? <p className="mt-4 text-sm text-slate-400">No resource ID is available for this alert.</p> : null}
-      {resourceId && isLoading ? <p className="mt-4 text-sm text-slate-400">Loading metrics context...</p> : null}
-      {resourceId && !isLoading && context?.status === 'disabled' ? <p className="mt-4 text-sm text-slate-400">{context.message}</p> : null}
-      {resourceId && !isLoading && context?.status === 'error' ? <p className="mt-4 text-sm text-amber-300">{context.message}</p> : null}
-      {resourceId && !isLoading && context?.status === 'ready' && context.series.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-400">No metric data was returned for this resource and time range.</p>
-      ) : null}
+      {!resourceId && <Notice>No resource ID is available for this alert.</Notice>}
+      {resourceId && isLoading && !context && (
+        <p className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
+          <Spinner size={12} /> Loading metrics…
+        </p>
+      )}
+      {resourceId && context?.status === 'disabled' && <Notice>{context.message}</Notice>}
+      {resourceId && context?.status === 'error' && <Notice tone="warning">{context.message}</Notice>}
+      {resourceId && context?.status === 'ready' && context.series.length === 0 && <Notice>No metric data was returned for this resource and time range.</Notice>}
 
       {context?.status === 'ready' && context.series.length > 0 ? (
-        <div className="mt-5 grid gap-4">
+        <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
           {context.series.map((series) => (
             <MetricCard key={`${series.metricName}-${series.aggregation}`} series={series} />
           ))}
         </div>
       ) : null}
-    </section>
+    </Card>
   );
 }
