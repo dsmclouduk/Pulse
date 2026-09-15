@@ -101,7 +101,7 @@ export const logAnalyticsProvider: MetricHistoryProvider = {
       return unavailableResult(
         request,
         'log-analytics',
-        'Log Analytics is not configured. Set LOG_ANALYTICS_WORKSPACE_ID together with the Azure credentials.'
+        'Log Analytics needs the Azure credentials (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET).'
       );
     }
 
@@ -116,7 +116,13 @@ export const logAnalyticsProvider: MetricHistoryProvider = {
 
     try {
       const token = await getAzureToken(LOG_ANALYTICS_RESOURCE);
-      const response = await fetch(`https://api.loganalytics.io/v1/workspaces/${encodeURIComponent(workspaceId)}/query`, {
+      // Resource-context query: the VM's ARM path is the scope, so Pulse needs only read access on
+      // the resource and no workspace id. Workspaces set to "resource permissions only" refuse the
+      // workspace-context form entirely, which is the common case for VM Insights.
+      const url = request.resourceId
+        ? `https://api.loganalytics.io/v1${request.resourceId}/query`
+        : `https://api.loganalytics.io/v1/workspaces/${encodeURIComponent(workspaceId)}/query`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

@@ -78,6 +78,26 @@ export function formatRelativeTime(value: string): string {
   return relativeFormatter.format(diffDays, 'day');
 }
 
+const OPERATOR_SYMBOLS: Record<string, string> = {
+  greaterthan: '>',
+  greaterorlessthan: '≷',
+  greaterthanorequal: '≥',
+  lessthan: '<',
+  lessthanorequal: '≤',
+  equals: '=',
+  notequals: '≠'
+};
+
+/** Renders "< 90" rather than assuming every rule is a greater-than. */
+export function formatThreshold(threshold: number | null | undefined, operator?: string): string | undefined {
+  if (threshold === undefined || threshold === null) {
+    return undefined;
+  }
+
+  const symbol = operator ? (OPERATOR_SYMBOLS[operator.toLowerCase()] ?? operator) : '>';
+  return `${symbol} ${threshold}`;
+}
+
 export function shortenResourceId(resourceId: string | undefined): string {
   if (!resourceId) {
     return 'Unknown resource';

@@ -19,8 +19,14 @@ export function isAzureMetricsConfigured(): boolean {
   return Boolean(process.env.AZURE_TENANT_ID && process.env.AZURE_CLIENT_ID && process.env.AZURE_CLIENT_SECRET);
 }
 
+/**
+ * Resource-context queries need only the Azure credentials: the resource's own ARM path is the
+ * scope, so no workspace id is required. LOG_ANALYTICS_WORKSPACE_ID is only the fallback for
+ * workspace-context queries, and many workspaces refuse those outright (they are configured for
+ * resource permissions only).
+ */
 export function isLogAnalyticsConfigured(): boolean {
-  return isAzureMetricsConfigured() && Boolean(process.env.LOG_ANALYTICS_WORKSPACE_ID);
+  return isAzureMetricsConfigured();
 }
 
 export async function getAzureToken(resource: string): Promise<string> {

@@ -65,6 +65,8 @@ function mapStoredAlert(record: {
   metricName: string | null;
   metricValue: number | null;
   threshold: number | null;
+  operator: string | null;
+  dimensionsJson: string | null;
   description: string | null;
   isSimulated: boolean;
 }): AlertEvent {
@@ -86,9 +88,23 @@ function mapStoredAlert(record: {
     metricName: record.metricName ?? undefined,
     metricValue: record.metricValue ?? undefined,
     threshold: record.threshold ?? undefined,
+    operator: record.operator ?? undefined,
+    dimensions: parseDimensions(record.dimensionsJson),
     description: record.description ?? undefined,
     isSimulated: record.isSimulated
   };
+}
+
+function parseDimensions(value: string | null): Record<string, string> | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(value) as Record<string, string>;
+  } catch {
+    return undefined;
+  }
 }
 
 async function resolveAlertScope(alert: AlertEvent, options: PersistAlertOptions): Promise<ResolvedAlertScope> {
@@ -258,6 +274,8 @@ export async function persistAlert(
         metricName: alert.metricName,
         metricValue: alert.metricValue,
         threshold: alert.threshold,
+        operator: alert.operator,
+        dimensionsJson: alert.dimensions ? JSON.stringify(alert.dimensions) : null,
         description: alert.description,
         rawPayloadJson: JSON.stringify(rawPayload),
         isSimulated: alert.isSimulated
@@ -280,6 +298,8 @@ export async function persistAlert(
         metricName: alert.metricName,
         metricValue: alert.metricValue,
         threshold: alert.threshold,
+        operator: alert.operator,
+        dimensionsJson: alert.dimensions ? JSON.stringify(alert.dimensions) : null,
         description: alert.description,
         rawPayloadJson: JSON.stringify(rawPayload),
         isSimulated: alert.isSimulated

@@ -156,6 +156,8 @@ model AlertEventRecord {
   metricName           String?
   metricValue          Float?
   threshold            Float?
+  operator             String?
+  dimensionsJson       String?
   description          String?              @db.NVarChar(Max)
   rawPayloadJson       String?              @db.NVarChar(Max)
   isSimulated          Boolean              @default(false)

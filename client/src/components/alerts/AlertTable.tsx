@@ -7,7 +7,7 @@ import { LagBadge } from '@/components/alerts/LagBadge';
 import { SeverityIndicator } from '@/components/alerts/SeverityIndicator';
 import { Spinner } from '@/components/ui';
 import { useAlertData } from '@/context/AlertDataContext';
-import { shortenResourceId } from '@/lib/alerts';
+import { formatThreshold, shortenResourceId } from '@/lib/alerts';
 
 interface AlertTableProps {
   alerts: AlertEvent[];
@@ -342,7 +342,7 @@ export function AlertTable({
                   </td>
 
                   <td className={`${tdBase} ${rowBg} font-mono text-xs text-[var(--color-text-secondary)]`}>
-                    {alert.threshold !== undefined && alert.threshold !== null ? `> ${alert.threshold}` : '—'}
+                    {formatThreshold(alert.threshold, alert.operator) ?? '—'}
                   </td>
                 </tr>
               );

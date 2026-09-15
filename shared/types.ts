@@ -22,6 +22,8 @@ export interface AlertEvent {
   threshold?: number;
   description?: string;
   isSimulated: boolean;
+  /** Comparison from the alert condition, e.g. 'LessThan'. Needed to render the threshold correctly. */
+  operator?: string;
   /** Metric dimensions from the alert condition, e.g. { mountId: 'C:' } for a per-disk alert. */
   dimensions?: Record<string, string>;
 }
@@ -52,6 +54,9 @@ export interface AzureCommonAlertSchema {
       condition?: {
         allOf?: Array<{
           metricName?: string;
+          /** Log alerts name the aggregated column here instead of metricName. */
+          metricMeasureColumn?: string;
+          searchQuery?: string;
           operator?: string;
           threshold?: string | number;
           metricValue?: string | number;

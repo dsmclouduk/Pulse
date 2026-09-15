@@ -79,9 +79,11 @@ export function normaliseAzureAlert(payload: AzureCommonAlertSchema, receivedAt:
     resolvedAt: essentials.resolvedDateTime,
     receivedAt,
     lagMs,
-    metricName: primaryCondition?.metricName,
+    // Log alerts carry the aggregated column name rather than a platform metric name.
+    metricName: primaryCondition?.metricName ?? primaryCondition?.metricMeasureColumn,
     metricValue: parseNumber(primaryCondition?.metricValue),
     threshold: parseNumber(primaryCondition?.threshold),
+    operator: primaryCondition?.operator,
     description: alertContext?.description ?? essentials.description,
     isSimulated,
     dimensions: extractDimensions(primaryCondition?.dimensions)

@@ -8,7 +8,7 @@ import { LagBadge } from '@/components/alerts/LagBadge';
 import { SeverityIndicator } from '@/components/alerts/SeverityIndicator';
 import { Badge, Button } from '@/components/ui';
 import { useAlertComments, useAlertEnrichment, useLatestDiagnosis } from '@/context/AlertDataContext';
-import { formatAbsoluteTime, formatRelativeTime, shortenResourceId } from '@/lib/alerts';
+import { formatAbsoluteTime, formatRelativeTime, formatThreshold, shortenResourceId } from '@/lib/alerts';
 import type { AlertEvent } from '@/types';
 
 export type DetailTab = 'overview' | 'metrics' | 'diagnosis' | 'comments' | 'history';
@@ -106,7 +106,7 @@ function OverviewTab({ alert }: Readonly<{ alert: AlertEvent }>) {
             <DetailRow label="Received At" value={formatAbsoluteTime(alert.receivedAt)} />
             <DetailRow label="Webhook Lag" value={`${alert.lagMs} ms`} mono />
             <DetailRow label="Alert Value" value={alert.metricValue} mono />
-            <DetailRow label="Threshold" value={alert.threshold !== undefined && alert.threshold !== null ? `> ${alert.threshold}` : undefined} mono />
+            <DetailRow label="Threshold" value={formatThreshold(alert.threshold, alert.operator)} mono />
             {alert.isSimulated && <DetailRow label="Simulated" value="Yes" />}
           </tbody>
         </table>

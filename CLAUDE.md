@@ -167,7 +167,10 @@ same SSE filters apply (`matchesScope` in `sseRegistry.ts`).
 
 After `broadcast`, `processAlert.ts` calls `scheduleEnrichment` and never awaits it. The orchestrator:
 1. plans metric history requests (`metricRequestPlanner.ts`): simulated → synthetic provider; VM disk metric → Log Analytics
-   `InsightsMetrics` (90 d daily + 7 d hourly); other metric alerts → ARM metrics (7 d hourly + 6 h 5-minute zoom)
+   `InsightsMetrics` (90 d daily + 7 d hourly); other metric alerts → ARM metrics (7 d hourly + 6 h 5-minute zoom).
+   A disk alert is recognised from the metric name, rule name **or** description, because log alerts name the
+   aggregated query column (`FreePct`) rather than a platform metric. Any other guest log alert on a VM charts
+   its aggregated column from the workspace.
 2. runs `analyseTrend` (pure) → pattern `rapid-fill | steady-growth | declining | volatile | flat | insufficient-data` and a suggested urgency
 3. asks the agent provider (Anthropic when `ANTHROPIC_API_KEY` is set, otherwise rule-based) for a diagnosis, falling back to rule-based on any LLM failure
 4. renders a fixed markdown template (trend numbers always come from our analysis, not the model) and posts a `diagnosis` comment
@@ -213,7 +216,7 @@ Copy `.env.example` to `.env` before running anything.
 | `AZURE_CLIENT_ID` | Phase 3+ | Not needed for Phase 1 or 2 |
 | `AZURE_CLIENT_SECRET` | Phase 3+ | Not needed for Phase 1 or 2 |
 | `AZURE_SUBSCRIPTION_IDS` | Phase 3+ | Comma-separated |
-| `LOG_ANALYTICS_WORKSPACE_ID` | Enrichment (disk history) | Workspace GUID; SP needs Log Analytics Reader; token audience `https://api.loganalytics.io/` |
+| `LOG_ANALYTICS_WORKSPACE_ID` | Optional | Guest history is queried in **resource context** (`/v1<resourceId>/query`), which needs only the Azure credentials. This is the workspace-context fallback; workspaces set to "resource permissions only" refuse that form |
 | `ANTHROPIC_API_KEY` | Enrichment (LLM) | Optional. Absent → rule-based diagnosis, clearly labelled |
 | `PULSE_AGENT_PROVIDER` | Enrichment | `auto` (default), `anthropic`, `rule-based` |
 | `PULSE_AGENT_MODEL` | Enrichment | Default `claude-opus-5` |

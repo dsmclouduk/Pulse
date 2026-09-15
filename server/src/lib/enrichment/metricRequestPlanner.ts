@@ -20,6 +20,17 @@ export function isDiskMetric(metricName: string | undefined): boolean {
   return Boolean(metricName && DISK_METRIC_PATTERN.test(metricName));
 }
 
+/**
+ * Log alerts name the aggregated column (e.g. "FreePct") rather than a platform metric, so the
+ * metric name alone cannot identify a disk alert. Fall back to the rule name and description, which
+ * is where the intent actually lives on a scheduled-query rule.
+ */
+export function isDiskAlert(alert: AlertEvent): boolean {
+  return [alert.metricName, alert.ruleName, alert.description].some(
+    (value) => value && DISK_METRIC_PATTERN.test(value)
+  );
+}
+
 export function isPercentMetric(metricName: string | undefined): boolean {
   return Boolean(metricName && PERCENT_METRIC_PATTERN.test(metricName));
 }
@@ -89,7 +100,7 @@ export function planMetricHistory(alert: AlertEvent, config: EnrichmentConfig, n
   }
 
   // 3 + 4. VM disk alerts come from guest metrics, which live in Log Analytics (VM Insights).
-  if (isVm && isDiskMetric(metricName) && resourceId) {
+  if (isVm && isDiskAlert(alert) && resourceId) {
     if (!isLogAnalyticsConfigured()) {
       return {
         requests: [
@@ -199,7 +210,29 @@ export function planMetricHistory(alert: AlertEvent, config: EnrichmentConfig, n
     };
   }
 
-  // 6. Nothing we can query.
+  // 6. Any other guest (log) alert on a VM: the series lives in the workspace, keyed by the column
+  // the rule aggregates. Better a charted series than nothing, even when we cannot name the metric.
+  if (isVm && alert.signalType === 'Log' && metricName && resourceId && isLogAnalyticsConfigured()) {
+    return {
+      requests: [
+        {
+          alertId: alert.id,
+          resourceId,
+          source: 'log-analytics',
+          metricName,
+          dimensions: alert.dimensions,
+          timespan: timespan(nowMs, 7 * DAY_MS),
+          interval: 'PT1H',
+          ceiling: percentCeiling,
+          label: 'long-term'
+        }
+      ],
+      primaryIndex: 0,
+      reason: `Guest log alert on a VM; querying ${metricName} from Log Analytics.`
+    };
+  }
+
+  // 7. Nothing we can query.
   return {
     requests: [],
     primaryIndex: -1,
