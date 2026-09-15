@@ -101,8 +101,8 @@ npm run dev --workspace client
 
 ## API endpoints
 
-- `POST /api/webhook/azure-alerts`
-  Accepts Azure Common Alert Schema payloads and requires the `x-webhook-secret` header.
+- `POST /api/webhook/azure-alerts` and `POST /api/webhook/azure-alerts/<webhookSecret>`
+  Accepts Azure Common Alert Schema payloads. The first form requires the `x-webhook-secret` header (manual tests); the second carries the secret in the URL because Azure action groups cannot send custom headers. Either the global `WEBHOOK_SECRET` or a client's webhook secret is accepted.
 - `GET /api/alerts/stream`
   SSE endpoint. Sends an immediate `init` payload, then `alert`, `comment` and `enrichment` events, plus `: ping` keepalives every 15 seconds.
 - `GET /api/alerts`
@@ -180,9 +180,10 @@ ngrok http 3001
 
 3. Copy the HTTPS ngrok URL.
 4. In Azure Portal, go to Monitor -> Alerts -> Action Groups.
-5. Create or edit a webhook action:
-   URL: `https://<your-ngrok-id>.ngrok-free.app/api/webhook/azure-alerts`
-6. Add the custom header `x-webhook-secret` with the value from your `.env` file.
+5. Create or edit a webhook action. Azure action groups cannot send custom headers, so the secret goes in the URL path:
+   URL: `https://<your-ngrok-id>.ngrok-free.app/api/webhook/azure-alerts/<WEBHOOK_SECRET or client webhook secret>`
+   (The header form `x-webhook-secret` on `/api/webhook/azure-alerts` still works for curl and manual tests.)
+6. Use a per-client webhook secret from Settings when the alert should land in that client's scope.
 7. Enable `Use common alert schema`.
 8. Attach the action group to an alert rule and trigger the condition.
 9. Watch the live feed and lag badge in the UI.

@@ -45,8 +45,17 @@ export function SelectedClientCard({
         eyebrow="Selected client"
         title={client.name}
         description={
-          <span className="font-mono">
-            Webhook secret: <span className="select-all">{client.webhookSecret}</span>
+          <span className="block space-y-1">
+            <span className="block font-mono">
+              Webhook secret: <span className="select-all">{client.webhookSecret}</span>
+            </span>
+            <span className="block">
+              Action group webhook URL (Azure cannot send custom headers, so the secret travels in the path):
+              <code className="ml-1 select-all font-mono text-[11px] text-[var(--color-text)]">
+                {`${window.location.origin}/api/webhook/azure-alerts/${client.webhookSecret}`}
+              </code>
+              <span className="ml-1 text-[var(--color-text-tertiary)]">Replace the host with the public App Service or ngrok URL.</span>
+            </span>
           </span>
         }
         actions={<Badge tone="accent">{client.onboardingStatus}</Badge>}

@@ -84,6 +84,9 @@ README.md        Setup and ngrok instructions
 | `server/src/lib/comments/commentRepository.ts` | Alert comments (memory now, Prisma `AlertComment` when `DATABASE_URL` is set) |
 | `server/src/routes/alertEnrichment.ts` | `/api/alerts/comments*` and `/api/alerts/enrichment*` endpoints |
 | `server/src/lib/simulation/scenarios.ts` | Simulate presets (disk steady growth, rapid fill, flat, CPU sawtooth, memory leak) |
+| `docs/onboarding/DECISIONS.md` | Access model (Lighthouse), read-only vs write posture, webhook token, DCR and alert-rule decisions |
+| `docs/onboarding/COVERAGE.md` | Per resource type: metrics, Essential/Standard/Full baseline alerts, what cannot be monitored |
+| `scripts/github/*-issues.mjs` | Create/close GitHub issues for each milestone (dry-run by default, `--apply` to create) |
 | `client/src/hooks/useAlertStream.ts` | SSE hook with auto-reconnect; tracks alerts, comments and enrichment status |
 | `client/src/context/AlertDataContext.tsx` | Shares stream state; `useAlertComments`, `useAlertEnrichment`, `useLatestDiagnosis` |
 | `client/src/components/alerts/AlertDetailPanel.tsx` | Drawer with Overview / Metrics / Diagnosis tabs |
@@ -121,9 +124,16 @@ interface AlertEvent {
 
 ## Webhook Security
 
-Real webhook endpoint requires `x-webhook-secret` header matching `process.env.WEBHOOK_SECRET`.
+Real webhook endpoint accepts the secret two ways: the `x-webhook-secret` header on `/api/webhook/azure-alerts`
+(curl / manual tests) or in the URL path `/api/webhook/azure-alerts/<secret>`. The URL form exists because
+**Azure action-group Webhook actions cannot send custom headers**; credentials can only travel in the URI.
+Either `process.env.WEBHOOK_SECRET` or a client account's webhook secret is accepted. Never log the secret.
 Simulation endpoint (`/api/simulate/alert`) does NOT require the secret — it's dev-only.
 Never expose the simulation endpoint in production.
+
+Onboarding direction (see `docs/onboarding/DECISIONS.md` and `COVERAGE.md`): Azure Lighthouse delegation from the
+Synextra tenant, read-only roles for the Pulse service principal, engineers run Pulse-generated baseline scripts.
+Pulse write access to client tenants is deferred.
 
 If you add any new endpoints that receive external data, validate the secret header first.
 
@@ -251,8 +261,8 @@ curl -X POST http://localhost:3001/api/simulate/alert \
 1. Start ngrok: `ngrok http 3001`
 2. Copy the `https://xxxx.ngrok-free.app` URL
 3. In Azure Portal: Monitor → Alerts → Action Groups
-4. Add Webhook action, URL: `https://xxxx.ngrok-free.app/api/webhook/azure-alerts`
-5. Add custom header: `x-webhook-secret` = your `WEBHOOK_SECRET` value
+4. Add Webhook action, URL: `https://xxxx.ngrok-free.app/api/webhook/azure-alerts/<WEBHOOK_SECRET>` (the secret goes in the path; action groups cannot add headers)
+5. Use a client's webhook secret from Settings instead of the global one to scope the alert to that client
 6. Enable **Use common alert schema: YES** (critical)
 7. Create an alert rule on any resource with a threshold you can breach
 8. Breach the threshold and watch the lag badge in the UI
