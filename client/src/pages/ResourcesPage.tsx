@@ -175,8 +175,9 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
         </div>
 
         <div className="relative min-w-0 flex-1 overflow-auto">
+        {/* Fills the content pane so the panel meets the resource tree, with no sliver of table showing. */}
         {openResource_ && (
-          <div className="absolute inset-y-0 right-0 z-20 w-[min(100%,900px)]">
+          <div className="absolute inset-0 z-20">
             <ResourceDetailPanel resource={openResource_} activeTab={resourceTab} onTabChange={setResourceTab} onClose={() => setOpenResourceId(null)} />
           </div>
         )}

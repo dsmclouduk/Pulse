@@ -215,7 +215,7 @@ export function ResourceDetailPanel({ resource, activeTab, onTabChange, onClose 
             {resource.isSimulated && <Badge tone="neutral">SIM</Badge>}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-secondary)]">
-            <span>{resource.resourceType.split('/').pop()}</span>
+            <span>{resource.resourceTypeLabel}</span>
             {resource.resourceGroup && (
               <>
                 <span className="text-[var(--color-text-tertiary)]">·</span>
