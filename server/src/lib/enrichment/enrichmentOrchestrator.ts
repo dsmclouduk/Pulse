@@ -3,10 +3,12 @@ import type {
   AlertEnrichmentStatus,
   AlertEvent,
   MetricHistoryResult,
+  PriorAlertContext,
   TrendAnalysis
 } from '../../../../shared/types.js';
 import type { AgentDiagnosis } from '../agent/agentProvider.js';
 import { agentAuthorName, renderDiagnosisMarkdown } from '../agent/formatDiagnosisComment.js';
+import { buildPriorContext } from '../agent/priorContext.js';
 import { resolveAgentProvider } from '../agent/resolveAgentProvider.js';
 import type { AlertQueryFilters } from '../alertRepository.js';
 import { downsamplePoints } from '../analysis/downsample.js';
@@ -231,10 +233,21 @@ export async function runEnrichment(alert: AlertEvent, options: EnrichmentOption
       agentModel: agent.name === 'anthropic' ? config.agentModel : undefined
     });
 
+    // Earlier alerts on this resource and similar ones elsewhere (with diagnoses and notes) so the
+    // agent can spot recurrence and reuse noted resolutions. Never fatal.
+    let prior: PriorAlertContext | undefined;
+
+    try {
+      prior = await buildPriorContext(alert);
+    } catch (error) {
+      log(`prior context failed alert=${alert.id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    const agentInput = { alert, trend, history, prior };
     let diagnosis: AgentDiagnosis;
 
     try {
-      diagnosis = await agent.diagnose({ alert, trend, history }, { signal: controller.signal });
+      diagnosis = await agent.diagnose(agentInput, { signal: controller.signal });
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       log(`agent ${agent.name} failed alert=${alert.id}: ${reason}`);
@@ -244,7 +257,7 @@ export async function runEnrichment(alert: AlertEvent, options: EnrichmentOption
       }
 
       await postStatusComment(alert, `LLM diagnosis failed (${reason}). Fell back to the rule-based diagnosis.`, options.trigger);
-      diagnosis = await fallback.diagnose({ alert, trend, history }, { signal: controller.signal });
+      diagnosis = await fallback.diagnose(agentInput, { signal: controller.signal });
     }
 
     const body = renderDiagnosisMarkdown(diagnosis, trend, alert);

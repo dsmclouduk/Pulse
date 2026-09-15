@@ -132,12 +132,55 @@ function buildDiagnosis(input: AgentInput): Omit<AgentDiagnosis, 'provider' | 'i
   }
 }
 
+/** Appends recurrence and prior-resolution facts from earlier alerts; escalates urgency when the problem keeps returning. */
+function applyPriorContext(diagnosis: Omit<AgentDiagnosis, 'provider' | 'isFallback' | 'model'>, input: AgentInput) {
+  const prior = input.prior;
+
+  if (!prior || (prior.sameResource.length === 0 && prior.similar.length === 0)) {
+    return diagnosis;
+  }
+
+  const sentences: string[] = [];
+  const actions = [...diagnosis.recommendedActions];
+  let urgency = diagnosis.urgency;
+
+  if (prior.sameResourceCount30d >= 2) {
+    sentences.push(`This resource has alerted ${prior.sameResourceCount30d} times in the last 30 days, so the underlying cause has not been addressed.`);
+    if (urgency === 'planned') urgency = 'soon';
+    else if (urgency === 'soon') urgency = 'immediate';
+  }
+
+  const withResolution = [...prior.sameResource, ...prior.similar].find((entry) => entry.notes.length > 0);
+
+  if (withResolution) {
+    const where = prior.sameResource.includes(withResolution) ? 'on this resource' : `on ${withResolution.resourceName}${withResolution.clientSlug ? ` (client ${withResolution.clientSlug})` : ''}`;
+    sentences.push(`This happened previously ${where} in alert "${withResolution.ruleName}" (${withResolution.firedAt.slice(0, 10)}); the noted resolution was: "${withResolution.notes[0]}".`);
+    actions.unshift(`Check whether the previous resolution still applies: ${withResolution.notes[0]}`);
+  } else {
+    const withDiagnosis = prior.sameResource.find((entry) => entry.diagnosisSummary);
+    if (withDiagnosis) {
+      sentences.push(`The previous diagnosis on this resource (${withDiagnosis.firedAt.slice(0, 10)}) was: ${withDiagnosis.diagnosisSummary}`);
+    }
+  }
+
+  if (sentences.length === 0) {
+    return diagnosis;
+  }
+
+  return {
+    ...diagnosis,
+    urgency,
+    reasoning: `${diagnosis.reasoning} ${sentences.join(' ')}`,
+    recommendedActions: actions
+  };
+}
+
 export const ruleBasedProvider: AgentProvider = {
   name: 'rule-based',
   isConfigured: () => true,
   diagnose: async (input) =>
     clampDiagnosis({
-      ...buildDiagnosis(input),
+      ...applyPriorContext(buildDiagnosis(input), input),
       provider: 'rule-based',
       isFallback: true
     })

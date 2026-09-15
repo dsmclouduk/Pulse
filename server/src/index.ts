@@ -10,7 +10,9 @@ import { authRouter } from './routes/auth.js';
 import { startMetricsPolling } from './lib/metricsService.js';
 import { alertsRouter } from './routes/alerts.js';
 import { metricsRouter } from './routes/metrics.js';
+import { resourcesRouter } from './routes/resources.js';
 import { simulateRouter } from './routes/simulate.js';
+import { statsRouter } from './routes/stats.js';
 import { sseRouter } from './routes/sse.js';
 import { webhookRouter } from './routes/webhook.js';
 
@@ -42,6 +44,8 @@ app.use('/api/alerts', alertsRouter);
 app.use('/api/alerts', sseRouter);
 app.use('/api/alerts', alertEnrichmentRouter);
 app.use('/api/metrics', metricsRouter);
+app.use('/api/resources', resourcesRouter);
+app.use('/api/stats', statsRouter);
 app.use('/api/simulate', simulateRouter);
 
 app.listen(port, () => {

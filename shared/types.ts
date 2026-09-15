@@ -419,3 +419,104 @@ export interface AlertEnrichmentDetail extends AlertEnrichmentStatus {
   history: MetricHistoryResult[];
   comments: AlertComment[];
 }
+
+// ---------------------------------------------------------------------------
+// Resources (derived from alerts; Pulse is not an inventory or metrics store)
+// ---------------------------------------------------------------------------
+
+export interface ResourceLastDiagnosis {
+  alertId: string;
+  commentId: string;
+  createdAt: string;
+  urgency?: DiagnosisUrgency;
+  pattern?: TrendPattern;
+  summary: string;
+  provider?: string;
+}
+
+export interface ResourceSummary {
+  resourceId: string;
+  name: string;
+  resourceType: string;
+  resourceGroup?: string;
+  subscriptionId?: string;
+  clientSlug?: string;
+  firstSeenAt: string;
+  lastAlertAt: string;
+  alertCount: number;
+  firingCount: number;
+  resolvedCount: number;
+  highestFiringSeverity: AlertSeverity | null;
+  lastAlert: Pick<AlertEvent, 'id' | 'ruleName' | 'severity' | 'status' | 'metricName' | 'metricValue' | 'threshold' | 'firedAt'>;
+  noteCount: number;
+  lastDiagnosis: ResourceLastDiagnosis | null;
+  isSimulated: boolean;
+}
+
+export interface ResourceHistoryEntry {
+  alert: AlertEvent;
+  diagnosis: ResourceLastDiagnosis | null;
+  noteCount: number;
+  /** Fired → Resolved duration in ms when resolved. */
+  durationMs: number | null;
+}
+
+export interface ResourceHistory {
+  resource: ResourceSummary | null;
+  entries: ResourceHistoryEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard stats
+// ---------------------------------------------------------------------------
+
+export interface AlertStats {
+  generatedAt: string;
+  clientSlug?: string;
+  totals: {
+    alerts: number;
+    firing: number;
+    resolved: number;
+    resources: number;
+    simulated: number;
+  };
+  bySeverity: Record<AlertSeverity, { firing: number; total: number }>;
+  byUrgency: Record<DiagnosisUrgency, number>;
+  byPattern: Record<TrendPattern, number>;
+  last24h: { fired: number; resolved: number };
+  lag: { averageMs: number | null; p95Ms: number | null; over30sCount: number };
+  meanTimeToResolveMs: number | null;
+  perDay: Array<{ date: string; fired: number; resolved: number }>;
+  topResources: Array<Pick<ResourceSummary, 'resourceId' | 'name' | 'resourceType' | 'alertCount' | 'firingCount' | 'highestFiringSeverity'>>;
+  topRules: Array<{ ruleName: string; count: number; firing: number }>;
+  enrichment: { diagnosed: number; ruleBased: number; llm: number; failed: number; active: number };
+}
+
+// ---------------------------------------------------------------------------
+// Prior context handed to the agent
+// ---------------------------------------------------------------------------
+
+export interface PriorAlertReference {
+  alertId: string;
+  ruleName: string;
+  resourceName: string;
+  clientSlug?: string;
+  firedAt: string;
+  resolvedAt: string | null;
+  severity: AlertSeverity;
+  metricName?: string;
+  metricValue?: number;
+  diagnosisSummary?: string;
+  diagnosisUrgency?: DiagnosisUrgency;
+  trendPattern?: TrendPattern;
+  /** Operator notes on that alert, newest first, trimmed. */
+  notes: string[];
+}
+
+export interface PriorAlertContext {
+  /** Earlier alerts on the same resource (newest first). */
+  sameResource: PriorAlertReference[];
+  /** Alerts with the same metric on the same resource type elsewhere, possibly other clients (newest first). */
+  similar: PriorAlertReference[];
+  sameResourceCount30d: number;
+}

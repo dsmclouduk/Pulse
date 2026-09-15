@@ -72,6 +72,16 @@ export function AlertsPage({ alerts, severityLevels, onSeverityLevelsChange }: R
   useEffect(() => {
     const requested = searchParams.get('alert');
     const tab = searchParams.get('tab');
+    const resource = searchParams.get('resource');
+
+    // Deep link from Resources / Dashboard: /alerts?resource=<armId> filters the feed to that resource.
+    if (resource) {
+      setFilters((prev) => ({ ...prev, searchText: resource, showSimulated: true }));
+      const next = new URLSearchParams(searchParams);
+      next.delete('resource');
+      setSearchParams(next, { replace: true });
+      return;
+    }
 
     if (requested) {
       setSelectedAlertId(requested);
@@ -244,7 +254,14 @@ export function AlertsPage({ alerts, severityLevels, onSeverityLevelsChange }: R
             className="absolute inset-y-0 right-0 z-20"
             style={{ left: pinnedWidth, minWidth: MIN_FLYOUT_WIDTH }}
           >
-            <AlertDetailPanel alert={selectedAlert} activeTab={activeTab} onTabChange={setActiveTab} onClose={closeFlyout} onRefire={(alert) => void handleRefire(alert)} />
+            <AlertDetailPanel
+              alert={selectedAlert}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              onClose={closeFlyout}
+              onRefire={(alert) => void handleRefire(alert)}
+              onSelectAlert={(alertId) => setSelectedAlertId(alertId)}
+            />
           </div>
         )}
       </div>

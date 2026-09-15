@@ -76,14 +76,6 @@ function ServicesIcon() {
   );
 }
 
-function LogsIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-      <path d="M3 4h12M3 7h9M3 10h6M3 13h10" />
-    </svg>
-  );
-}
-
 function AlertsIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
@@ -223,10 +215,9 @@ export function Sidebar({ alerts, onSeverityClick, activeLevels }: Readonly<Side
       {/* Nav items */}
       <nav className="flex flex-1 flex-col">
         {/* Future pages */}
-        <DisabledNavItem icon={<DashboardsIcon />} label="Dashboards" />
-        <DisabledNavItem icon={<ResourceTreeIcon />} label="Resources" />
+        <NavItem to="/dashboard" icon={<DashboardsIcon />} label="Dashboard" />
+        <NavItem to="/resources" icon={<ResourceTreeIcon />} label="Resources" />
         <DisabledNavItem icon={<ServicesIcon />} label="Services" />
-        <DisabledNavItem icon={<LogsIcon />} label="Logs" />
 
         {/* Divider */}
         <div className="mx-3 my-1 h-px bg-white/10" />

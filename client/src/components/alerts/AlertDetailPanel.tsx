@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { AlertCommentsTab, isDiagnosisThread } from '@/components/alerts/AlertCommentsTab';
+import { AlertHistoryTab } from '@/components/alerts/AlertHistoryTab';
 import { AlertMetricsTab } from '@/components/alerts/AlertMetricsTab';
 import { EnrichmentStatePill, UrgencyBadge } from '@/components/alerts/EnrichmentBadges';
 import { LagBadge } from '@/components/alerts/LagBadge';
@@ -10,10 +11,10 @@ import { useAlertComments, useAlertEnrichment, useLatestDiagnosis } from '@/cont
 import { formatAbsoluteTime, formatRelativeTime, shortenResourceId } from '@/lib/alerts';
 import type { AlertEvent } from '@/types';
 
-export type DetailTab = 'overview' | 'metrics' | 'diagnosis' | 'comments';
+export type DetailTab = 'overview' | 'metrics' | 'diagnosis' | 'comments' | 'history';
 
 export function isDetailTab(value: string | null): value is DetailTab {
-  return value === 'overview' || value === 'metrics' || value === 'diagnosis' || value === 'comments';
+  return value === 'overview' || value === 'metrics' || value === 'diagnosis' || value === 'comments' || value === 'history';
 }
 
 interface AlertDetailPanelProps {
@@ -23,6 +24,8 @@ interface AlertDetailPanelProps {
   onTabChange: (tab: DetailTab) => void;
   onClose: () => void;
   onRefire?: (alert: AlertEvent) => void;
+  /** Open another alert (used by the History tab). */
+  onSelectAlert?: (alertId: string) => void;
 }
 
 function DetailRow({ label, value, mono = false }: Readonly<{ label: string; value: string | number | null | undefined; mono?: boolean }>) {
@@ -114,7 +117,7 @@ function OverviewTab({ alert }: Readonly<{ alert: AlertEvent }>) {
  * Right-hand flyout for the selected alert. The parent positions it so its left edge aligns with
  * the end of the pinned Resource + Severity columns, so rows stay clickable while it is open.
  */
-export function AlertDetailPanel({ alert, activeTab, onTabChange, onClose, onRefire }: Readonly<AlertDetailPanelProps>) {
+export function AlertDetailPanel({ alert, activeTab, onTabChange, onClose, onRefire, onSelectAlert }: Readonly<AlertDetailPanelProps>) {
   const enrichment = useAlertEnrichment(alert.id);
   const comments = useAlertComments(alert.id);
 
@@ -137,7 +140,8 @@ export function AlertDetailPanel({ alert, activeTab, onTabChange, onClose, onRef
     { id: 'overview', label: 'Overview' },
     { id: 'metrics', label: 'Metrics' },
     { id: 'diagnosis', label: 'Diagnosis', badge: diagnosisCount },
-    { id: 'comments', label: 'Comments', badge: noteCount }
+    { id: 'comments', label: 'Comments', badge: noteCount },
+    { id: 'history', label: 'History' }
   ];
 
   return (
@@ -210,6 +214,7 @@ export function AlertDetailPanel({ alert, activeTab, onTabChange, onClose, onRef
         {activeTab === 'metrics' && <AlertMetricsTab alert={alert} />}
         {activeTab === 'diagnosis' && <AlertCommentsTab alert={alert} mode="diagnosis" />}
         {activeTab === 'comments' && <AlertCommentsTab alert={alert} mode="comments" />}
+        {activeTab === 'history' && <AlertHistoryTab alert={alert} onSelectAlert={onSelectAlert} />}
       </div>
     </aside>
   );

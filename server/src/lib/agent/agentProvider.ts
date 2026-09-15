@@ -1,9 +1,11 @@
-import type { AlertEvent, DiagnosisUrgency, MetricHistoryResult, TrendAnalysis } from '../../../../shared/types.js';
+import type { AlertEvent, DiagnosisUrgency, MetricHistoryResult, PriorAlertContext, TrendAnalysis } from '../../../../shared/types.js';
 
 export interface AgentInput {
   alert: AlertEvent;
   trend: TrendAnalysis | null;
   history: MetricHistoryResult[];
+  /** Earlier alerts on this resource and similar alerts elsewhere, with their diagnoses and operator notes. */
+  prior?: PriorAlertContext;
 }
 
 export interface AgentDiagnosis {
