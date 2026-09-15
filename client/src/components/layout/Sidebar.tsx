@@ -66,16 +66,6 @@ function ResourceTreeIcon() {
   );
 }
 
-function ServicesIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="2" width="14" height="4" rx="1" />
-      <rect x="2" y="8" width="14" height="4" rx="1" />
-      <rect x="2" y="14" width="14" height="2.5" rx="1" />
-    </svg>
-  );
-}
-
 function AlertsIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
@@ -136,23 +126,6 @@ function NavItem({ to, icon, label, badge }: Readonly<NavItemProps>) {
         </>
       )}
     </NavLink>
-  );
-}
-
-interface DisabledNavItemProps {
-  icon: React.ReactNode;
-  label: string;
-}
-
-function DisabledNavItem({ icon, label }: Readonly<DisabledNavItemProps>) {
-  return (
-    <div
-      className="flex w-full flex-col items-center gap-1 px-1 py-3 text-white/25 cursor-not-allowed"
-      title={`${label} (coming soon)`}
-    >
-      {icon}
-      <span className="text-[9px] font-medium leading-tight tracking-wide">{label}</span>
-    </div>
   );
 }
 
@@ -217,7 +190,6 @@ export function Sidebar({ alerts, onSeverityClick, activeLevels }: Readonly<Side
         {/* Future pages */}
         <NavItem to="/dashboard" icon={<DashboardsIcon />} label="Dashboard" />
         <NavItem to="/resources" icon={<ResourceTreeIcon />} label="Resources" />
-        <DisabledNavItem icon={<ServicesIcon />} label="Services" />
 
         {/* Divider */}
         <div className="mx-3 my-1 h-px bg-white/10" />
