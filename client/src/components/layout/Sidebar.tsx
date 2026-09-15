@@ -179,22 +179,21 @@ interface SeverityBadgeProps {
   onClick: () => void;
 }
 
-const badgeClasses: Record<SidebarSeverityLevel, { solid: string; outline: string; label: string }> = {
-  critical: { solid: 'bg-sev-critical text-white', outline: 'border-sev-critical text-sev-critical', label: 'Critical' },
-  error: { solid: 'bg-sev-error text-white', outline: 'border-sev-error text-sev-error', label: 'Error' },
-  warning: { solid: 'bg-sev-warning text-white', outline: 'border-sev-warning text-sev-warning', label: 'Warning' }
+const badgeClasses: Record<SidebarSeverityLevel, { solid: string; label: string }> = {
+  critical: { solid: 'bg-sev-critical text-white', label: 'Critical' },
+  error: { solid: 'bg-sev-error text-white', label: 'Error' },
+  warning: { solid: 'bg-sev-warning text-white', label: 'Warning' }
 };
 
-/** Zero counts keep the severity colour as an outlined chip so the row still reads as red / orange / yellow. */
+/** Always a solid severity-coloured chip with a white count, including at zero. */
 function SeverityBadge({ level, count, isActive, dimmed, onClick }: Readonly<SeverityBadgeProps>) {
   const classes = badgeClasses[level];
-  const tone = count > 0 ? classes.solid : `border ${classes.outline} bg-transparent`;
 
   return (
     <button
       onClick={onClick}
       title={`${classes.label}: ${count} firing. Click to filter${isActive ? ' (active)' : ''}`}
-      className={`flex min-w-[2.75rem] cursor-pointer items-center justify-center rounded-full px-2 py-[3px] text-[11px] font-bold leading-none shadow-sm transition-all ${tone} ${
+      className={`flex min-w-[2.75rem] cursor-pointer items-center justify-center rounded-full px-2 py-[3px] text-[11px] font-bold leading-none shadow-sm transition-all ${classes.solid} ${
         isActive ? 'ring-2 ring-white/80 ring-offset-1 ring-offset-sidebar' : ''
       } ${dimmed ? 'opacity-30 hover:opacity-60' : 'opacity-100 hover:scale-105'}`}
     >
