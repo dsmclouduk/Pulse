@@ -20,7 +20,8 @@ export default function App() {
   const [selectedClientSlug, setSelectedClientSlug] = useState<string | null>(null);
   const stream = useAlertStream({ clientSlug: selectedClientSlug });
   const { alerts, connectionStatus, lastReceivedAt } = stream;
-  const [sidebarSeverityFilter, setSidebarSeverityFilter] = useState<SidebarSeverityLevel | null>(null);
+  // Single source of truth for the severity filter: the sidebar chips and the toolbar buttons both read and write it.
+  const [severityLevels, setSeverityLevels] = useState<ReadonlySet<SidebarSeverityLevel>>(() => new Set());
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -28,7 +29,16 @@ export default function App() {
 
   const handleSidebarSeverityClick = useCallback(
     (level: SidebarSeverityLevel) => {
-      setSidebarSeverityFilter((prev) => (prev === level ? null : level));
+      setSeverityLevels((prev) => {
+        const next = new Set(prev);
+        if (next.has(level)) {
+          next.delete(level);
+        } else {
+          next.add(level);
+        }
+        return next;
+      });
+
       if (location.pathname !== '/alerts') {
         navigate('/alerts');
       }
@@ -46,7 +56,7 @@ export default function App() {
           onSelectClientSlug={setSelectedClientSlug}
           pageTitle={pageTitle}
           onSidebarSeverityClick={handleSidebarSeverityClick}
-          activeSeverityLevel={sidebarSeverityFilter}
+          activeSeverityLevels={severityLevels}
         >
           <Routes>
             <Route path="/" element={<Navigate to="/alerts" replace />} />
@@ -58,8 +68,8 @@ export default function App() {
                   connectionStatus={connectionStatus}
                   lastReceivedAt={lastReceivedAt}
                   selectedClientSlug={selectedClientSlug}
-                  sidebarSeverityFilter={sidebarSeverityFilter}
-                  onClearSidebarFilter={() => setSidebarSeverityFilter(null)}
+                  severityLevels={severityLevels}
+                  onSeverityLevelsChange={setSeverityLevels}
                 />
               }
             />

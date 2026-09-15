@@ -16,8 +16,9 @@ interface AlertsPageProps {
   connectionStatus: ConnectionStatus;
   lastReceivedAt: string | null;
   selectedClientSlug: string | null;
-  sidebarSeverityFilter: SidebarSeverityLevel | null;
-  onClearSidebarFilter: () => void;
+  /** Shared severity filter (sidebar chips + toolbar buttons). */
+  severityLevels: ReadonlySet<SidebarSeverityLevel>;
+  onSeverityLevelsChange: (levels: ReadonlySet<SidebarSeverityLevel>) => void;
 }
 
 const SEVERITY_LEVEL_MAP: Record<SidebarSeverityLevel, AlertSeverity[]> = {
@@ -26,10 +27,38 @@ const SEVERITY_LEVEL_MAP: Record<SidebarSeverityLevel, AlertSeverity[]> = {
   warning: ['Sev2', 'Sev3', 'Sev4']
 };
 
+function severitiesForLevels(levels: ReadonlySet<SidebarSeverityLevel>): Set<AlertSeverity> {
+  const severities = new Set<AlertSeverity>();
+
+  for (const level of levels) {
+    for (const severity of SEVERITY_LEVEL_MAP[level]) {
+      severities.add(severity);
+    }
+  }
+
+  return severities;
+}
+
+function levelsForSeverities(severities: ReadonlySet<AlertSeverity>): Set<SidebarSeverityLevel> {
+  const levels = new Set<SidebarSeverityLevel>();
+
+  for (const [level, members] of Object.entries(SEVERITY_LEVEL_MAP) as Array<[SidebarSeverityLevel, AlertSeverity[]]>) {
+    if (members.some((severity) => severities.has(severity))) {
+      levels.add(level);
+    }
+  }
+
+  return levels;
+}
+
+function sameSet<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean {
+  return left.size === right.size && [...left].every((value) => right.has(value));
+}
+
 /** The flyout never covers less than this much of the page, even if the pinned columns are dragged wide. */
 const MIN_FLYOUT_WIDTH = 520;
 
-export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter }: Readonly<AlertsPageProps>) {
+export function AlertsPage({ alerts, severityLevels, onSeverityLevelsChange }: Readonly<AlertsPageProps>) {
   const [filters, setFilters] = useState<AlertFilters>({ ...DEFAULT_FILTERS });
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -57,19 +86,13 @@ export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter
     }
   }, [searchParams, setSearchParams]);
 
+  // Sidebar chips → toolbar: keep the severity filter in step with the shared level set.
   useEffect(() => {
-    if (sidebarSeverityFilter === null) {
-      setFilters((prev) => ({ ...prev, severities: new Set(), statuses: new Set() }));
-      return;
-    }
-
-    const sevs = SEVERITY_LEVEL_MAP[sidebarSeverityFilter];
-    setFilters((prev) => ({
-      ...prev,
-      severities: new Set(sevs),
-      statuses: new Set()
-    }));
-  }, [sidebarSeverityFilter]);
+    setFilters((prev) => {
+      const next = severitiesForLevels(severityLevels);
+      return sameSet(prev.severities, next) ? prev : { ...prev, severities: next };
+    });
+  }, [severityLevels]);
 
   const processedAlerts = useMemo(() => filterAndSort(alerts, filters), [alerts, filters]);
   const selectedAlert = alerts.find((a) => a.id === selectedAlertId) ?? null;
@@ -89,9 +112,14 @@ export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter
 
   const closeFlyout = useCallback(() => setSelectedAlertId(null), []);
 
+  // Toolbar → sidebar chips: report the levels implied by the severity buttons.
   function handleFiltersChange(next: AlertFilters) {
-    onClearSidebarFilter();
     setFilters(next);
+
+    const nextLevels = levelsForSeverities(next.severities);
+    if (!sameSet(nextLevels, severityLevels)) {
+      onSeverityLevelsChange(nextLevels);
+    }
   }
 
   async function addNoteToChecked(): Promise<void> {

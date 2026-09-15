@@ -13,7 +13,8 @@ interface SeverityCounts {
 interface SidebarProps {
   alerts: AlertEvent[];
   onSeverityClick: (level: SidebarSeverityLevel) => void;
-  activeSeverityLevel: SidebarSeverityLevel | null;
+  /** Levels currently filtered on; shared with the toolbar's severity buttons. */
+  activeLevels: ReadonlySet<SidebarSeverityLevel>;
 }
 
 function countBySeverity(alerts: AlertEvent[]): SeverityCounts {
@@ -170,27 +171,46 @@ function formatBadgeCount(count: number): string {
   return String(count);
 }
 
-function SeverityBadge({ color, count, isActive, dimmed, onClick }: Readonly<{ color: string; count: number; isActive: boolean; dimmed: boolean; onClick: () => void }>) {
-  const formatted = formatBadgeCount(count);
+interface SeverityBadgeProps {
+  level: SidebarSeverityLevel;
+  count: number;
+  isActive: boolean;
+  dimmed: boolean;
+  onClick: () => void;
+}
+
+const badgeClasses: Record<SidebarSeverityLevel, { solid: string; outline: string; label: string }> = {
+  critical: { solid: 'bg-sev-critical text-white', outline: 'border-sev-critical text-sev-critical', label: 'Critical' },
+  error: { solid: 'bg-sev-error text-white', outline: 'border-sev-error text-sev-error', label: 'Error' },
+  warning: { solid: 'bg-sev-warning text-white', outline: 'border-sev-warning text-sev-warning', label: 'Warning' }
+};
+
+/** Zero counts keep the severity colour as an outlined chip so the row still reads as red / orange / yellow. */
+function SeverityBadge({ level, count, isActive, dimmed, onClick }: Readonly<SeverityBadgeProps>) {
+  const classes = badgeClasses[level];
+  const tone = count > 0 ? classes.solid : `border ${classes.outline} bg-transparent`;
 
   return (
     <button
       onClick={onClick}
-      className={`flex min-w-[2.75rem] cursor-pointer items-center justify-center rounded-full px-2 py-[3px] text-[11px] font-bold leading-none text-white shadow-sm transition-all ${
-        count > 0 ? color : `${color}/20`
+      title={`${classes.label}: ${count} firing. Click to filter${isActive ? ' (active)' : ''}`}
+      className={`flex min-w-[2.75rem] cursor-pointer items-center justify-center rounded-full px-2 py-[3px] text-[11px] font-bold leading-none shadow-sm transition-all ${tone} ${
+        isActive ? 'ring-2 ring-white/80 ring-offset-1 ring-offset-sidebar' : ''
       } ${dimmed ? 'opacity-30 hover:opacity-60' : 'opacity-100 hover:scale-105'}`}
     >
-      {formatted}
+      {formatBadgeCount(count)}
     </button>
   );
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────── */
 
-export function Sidebar({ alerts, onSeverityClick, activeSeverityLevel }: Readonly<SidebarProps>) {
+export function Sidebar({ alerts, onSeverityClick, activeLevels }: Readonly<SidebarProps>) {
   const counts = countBySeverity(alerts);
   const location = useLocation();
   const isAlertsActive = location.pathname === '/alerts';
+  const anyActive = activeLevels.size > 0;
+  const levels: SidebarSeverityLevel[] = ['critical', 'error', 'warning'];
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex w-[68px] flex-col border-r border-white/5" style={{ backgroundColor: '#0b1a2e' }}>
@@ -217,10 +237,17 @@ export function Sidebar({ alerts, onSeverityClick, activeSeverityLevel }: Readon
           <NavItem to="/alerts" icon={<AlertsIcon />} label="Alerts" />
 
           {/* Severity count badges — clickable to filter */}
-          <div className="flex flex-col items-center gap-1 pb-2 pt-1">
-            <SeverityBadge color="bg-sev-critical" count={counts.critical} isActive={activeSeverityLevel === 'critical'} dimmed={activeSeverityLevel !== null && activeSeverityLevel !== 'critical'} onClick={() => onSeverityClick('critical')} />
-            <SeverityBadge color="bg-sev-error" count={counts.error} isActive={activeSeverityLevel === 'error'} dimmed={activeSeverityLevel !== null && activeSeverityLevel !== 'error'} onClick={() => onSeverityClick('error')} />
-            <SeverityBadge color="bg-sev-warning" count={counts.warning} isActive={activeSeverityLevel === 'warning'} dimmed={activeSeverityLevel !== null && activeSeverityLevel !== 'warning'} onClick={() => onSeverityClick('warning')} />
+          <div className="flex flex-col items-center gap-1.5 pb-2 pt-1">
+            {levels.map((level) => (
+              <SeverityBadge
+                key={level}
+                level={level}
+                count={counts[level]}
+                isActive={activeLevels.has(level)}
+                dimmed={anyActive && !activeLevels.has(level)}
+                onClick={() => onSeverityClick(level)}
+              />
+            ))}
           </div>
         </div>
 

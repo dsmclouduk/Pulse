@@ -13,7 +13,7 @@ interface AppShellProps {
   onSelectClientSlug: (slug: string | null) => void;
   pageTitle: string;
   onSidebarSeverityClick: (level: SidebarSeverityLevel) => void;
-  activeSeverityLevel: SidebarSeverityLevel | null;
+  activeSeverityLevels: ReadonlySet<SidebarSeverityLevel>;
 }
 
 export function AppShell({
@@ -24,7 +24,7 @@ export function AppShell({
   onSelectClientSlug,
   pageTitle,
   onSidebarSeverityClick,
-  activeSeverityLevel,
+  activeSeverityLevels,
 }: Readonly<AppShellProps>) {
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
@@ -32,7 +32,7 @@ export function AppShell({
       <Sidebar
         alerts={alerts}
         onSeverityClick={onSidebarSeverityClick}
-        activeSeverityLevel={activeSeverityLevel}
+        activeLevels={activeSeverityLevels}
       />
 
       {/* Main area — offset by sidebar width */}
