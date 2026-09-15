@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
 
 import { AlertCommentsTab } from '@/components/alerts/AlertCommentsTab';
 import { AlertMetricsTab } from '@/components/alerts/AlertMetricsTab';
@@ -14,8 +14,9 @@ export type DetailTab = 'overview' | 'metrics' | 'diagnosis';
 
 interface AlertDetailPanelProps {
   alert: AlertEvent;
-  /** Tab to open when a new alert is selected (deep links). Defaults to overview. */
-  initialTab?: DetailTab;
+  /** Controlled by the page so the chosen tab persists when clicking through alerts. */
+  activeTab: DetailTab;
+  onTabChange: (tab: DetailTab) => void;
   onClose: () => void;
   onRefire?: (alert: AlertEvent) => void;
 }
@@ -109,25 +110,9 @@ function OverviewTab({ alert }: Readonly<{ alert: AlertEvent }>) {
  * Right-hand flyout for the selected alert. The parent positions it so its left edge aligns with
  * the end of the pinned Resource + Severity columns, so rows stay clickable while it is open.
  */
-export function AlertDetailPanel({ alert, initialTab, onClose, onRefire }: Readonly<AlertDetailPanelProps>) {
-  const [activeTab, setActiveTab] = useState<DetailTab>(initialTab ?? 'overview');
+export function AlertDetailPanel({ alert, activeTab, onTabChange, onClose, onRefire }: Readonly<AlertDetailPanelProps>) {
   const enrichment = useAlertEnrichment(alert.id);
   const comments = useAlertComments(alert.id);
-  const lastAlertIdRef = useRef<string | null>(null);
-  const lastInitialTabRef = useRef<DetailTab | undefined>(undefined);
-
-  // Reset the tab when a different alert is opened, and honour a deep-linked tab even if the
-  // alert data arrived before the deep link was parsed.
-  useEffect(() => {
-    if (alert.id !== lastAlertIdRef.current) {
-      lastAlertIdRef.current = alert.id;
-      setActiveTab(initialTab ?? 'overview');
-    } else if (initialTab && initialTab !== lastInitialTabRef.current) {
-      setActiveTab(initialTab);
-    }
-
-    lastInitialTabRef.current = initialTab;
-  }, [alert.id, initialTab]);
 
   // Escape closes the flyout.
   useEffect(() => {
@@ -196,7 +181,7 @@ export function AlertDetailPanel({ alert, initialTab, onClose, onRefire }: Reado
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => onTabChange(tab.id)}
             className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
               activeTab === tab.id
                 ? 'border-accent text-accent'

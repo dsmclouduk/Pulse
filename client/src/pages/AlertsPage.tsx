@@ -5,7 +5,6 @@ import type { AlertEvent, AlertSeverity } from '@/types';
 import type { ConnectionStatus } from '@/hooks/useAlertStream';
 import type { SidebarSeverityLevel } from '@/components/layout/Sidebar';
 import { AlertToolbar } from '@/components/alerts/AlertToolbar';
-import { AlertChart } from '@/components/alerts/AlertChart';
 import { AlertTabBar } from '@/components/alerts/AlertTabBar';
 import { AlertTable, DEFAULT_PINNED_WIDTH } from '@/components/alerts/AlertTable';
 import { AlertDetailPanel, type DetailTab } from '@/components/alerts/AlertDetailPanel';
@@ -36,7 +35,8 @@ export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [pinnedWidth, setPinnedWidth] = useState(DEFAULT_PINNED_WIDTH);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [requestedTab, setRequestedTab] = useState<DetailTab | undefined>(undefined);
+  // Lives here rather than in the flyout so the chosen tab persists as you click through alerts.
+  const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const { mergeComments } = useAlertData();
 
   // Deep link: /alerts?alert=<id>&tab=metrics opens that alert's flyout on a tab (used by the Simulate page).
@@ -46,7 +46,9 @@ export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter
 
     if (requested) {
       setSelectedAlertId(requested);
-      setRequestedTab(tab === 'metrics' || tab === 'diagnosis' ? tab : 'overview');
+      if (tab === 'metrics' || tab === 'diagnosis' || tab === 'overview') {
+        setActiveTab(tab);
+      }
       setFilters((prev) => ({ ...prev, showSimulated: true }));
       const next = new URLSearchParams(searchParams);
       next.delete('alert');
@@ -80,9 +82,8 @@ export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter
     }));
   }
 
-  /** Clicking a row opens the flyout for it; clicking the already-open row toggles it closed. */
+  /** Clicking a row opens the flyout for it (keeping the current tab); clicking the open row toggles it closed. */
   function handleSelectAlert(alert: AlertEvent) {
-    setRequestedTab(undefined);
     setSelectedAlertId((prev) => (prev === alert.id ? null : alert.id));
   }
 
@@ -192,11 +193,9 @@ export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter
         onClearChecked={() => setCheckedIds(new Set())}
       />
 
-      {/* Chart + table region. The flyout overlays the right-hand side of this region, leaving the
-          pinned Resource + Severity columns visible so rows can be clicked through. */}
+      {/* Table region. The flyout overlays the right-hand side, leaving the pinned Resource +
+          Severity columns visible so rows can be clicked through. */}
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <AlertChart alerts={alerts} />
-
         <AlertTabBar alertCount={processedAlerts.length} />
 
         <AlertTable
@@ -217,7 +216,7 @@ export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter
             className="absolute inset-y-0 right-0 z-20"
             style={{ left: pinnedWidth, minWidth: MIN_FLYOUT_WIDTH }}
           >
-            <AlertDetailPanel alert={selectedAlert} initialTab={requestedTab} onClose={closeFlyout} onRefire={(alert) => void handleRefire(alert)} />
+            <AlertDetailPanel alert={selectedAlert} activeTab={activeTab} onTabChange={setActiveTab} onClose={closeFlyout} onRefire={(alert) => void handleRefire(alert)} />
           </div>
         )}
       </div>
