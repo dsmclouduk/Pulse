@@ -2,7 +2,7 @@
 # behaves the same as Azure SQL later.
 #
 #   docker compose up -d db
-#   DATABASE_URL="sqlserver://localhost:1433;database=Pulse;user=sa;password=Pulse_Dev_Passw0rd!;encrypt=true;trustServerCertificate=true"
+#   DATABASE_URL="sqlserver://localhost:14330;database=Pulse;user=sa;password=Pulse_Dev_Passw0rd!;encrypt=true;trustServerCertificate=true"
 #   npm run db:push && npm run db:generate
 #
 # Change the password in both places if you prefer; it is a local-only credential.
@@ -15,7 +15,7 @@ services:
       MSSQL_SA_PASSWORD: 'Pulse_Dev_Passw0rd!'
       MSSQL_PID: Developer
     ports:
-      - '1433:1433'
+      - '14330:1433'   # host port 14330: a local SQL Server service often owns 1433
     volumes:
       - pulse-sql-data:/var/opt/mssql
     healthcheck:

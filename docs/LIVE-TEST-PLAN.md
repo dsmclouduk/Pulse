@@ -7,7 +7,7 @@ Goal: run Pulse against a real Azure Monitor alert from a test VM, end to end, f
 Prisma targets `sqlserver`, so the local database should be SQL Server too, not SQLite, or the schema (NVarChar(Max), cascade rules) will drift.
 
 - **Local:** SQL Server 2022 in Docker via `docker compose up -d db` (`docker-compose.yml` in the repo root). Connection string for `.env`:
-  `DATABASE_URL="sqlserver://localhost:1433;database=Pulse;user=sa;password=<from compose>;encrypt=true;trustServerCertificate=true"`
+  `DATABASE_URL="sqlserver://localhost:14330;database=Pulse;user=sa;password=<from compose>;encrypt=true;trustServerCertificate=true"`
   Then `npm run db:push` (schema) and `npm run db:generate`. Alerts, comments and enrichment then survive restarts and the client accounts UI works.
 - **Later:** Azure SQL Database (serverless tier is enough) in the Synextra tenant, App Service connects with its managed identity (`Authentication=Active Directory Managed Identity` in the connection string, Prisma supports it through the `sqlserver` driver with an access token; fall back to SQL auth stored in Key Vault if that proves awkward). Switch from `db push` to `prisma migrate` at that point so schema changes are reproducible.
 - Behaviour without a database is unchanged (in-memory, capped at 500 alerts), so nothing breaks if the container is down.
