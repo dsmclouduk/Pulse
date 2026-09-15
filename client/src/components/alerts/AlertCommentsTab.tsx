@@ -125,7 +125,10 @@ function useHydrateComments(alert: AlertEvent): void {
 }
 
 function DiagnosisThread({ alert }: Readonly<{ alert: AlertEvent }>) {
-  const comments = useAlertComments(alert.id).filter(isDiagnosisThread);
+  // Newest first: after a re-run the fresh diagnosis is what you came to read.
+  const comments = [...useAlertComments(alert.id).filter(isDiagnosisThread)].sort((left, right) =>
+    right.createdAt.localeCompare(left.createdAt)
+  );
   const status = useAlertEnrichment(alert.id);
   const [isRerunning, setIsRerunning] = useState(false);
   const [error, setError] = useState<string | null>(null);

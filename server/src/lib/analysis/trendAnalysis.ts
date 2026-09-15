@@ -1,3 +1,10 @@
+import {
+  changeDirection,
+  changeVerb,
+  formatMetricDelta,
+  formatMetricValue,
+  formatSpan
+} from './formatMetricValue.js';
 import type {
   DiagnosisUrgency,
   MetricAggregation,
@@ -104,11 +111,6 @@ export function valueAt(points: CleanPoint[], tMs: number): number | null {
 function round(value: number, decimals = 2): number {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
-}
-
-function formatSigned(value: number, decimals = 1): string {
-  const rounded = round(value, decimals);
-  return rounded > 0 ? `+${rounded}` : `${rounded}`;
 }
 
 function insufficient(series: MetricSeries, points: CleanPoint[], ceiling: number | null): TrendAnalysis {
@@ -303,38 +305,44 @@ export function analyseTrend(series: MetricSeries, options: TrendOptions = {}): 
       break;
   }
 
-  const unitLabel = series.unit === 'Percent' ? ' pts' : ` ${series.unit}`;
   const notes: string[] = [];
-  const spanLabel = spanDays >= 2 ? `${Math.round(spanDays)} days` : `${round(spanDays * 24, 0)} hours`;
+  const unit = series.unit;
+  const overallDelta = last - first;
+  const verb = changeVerb(overallDelta);
+  // A ceiling only exists for bounded metrics (a percentage, a quota); projections are skipped without one.
+  const ceilingLabel = ceiling === null ? null : formatMetricValue(ceiling, unit);
 
   notes.push(
-    `Changed ${formatSigned(last - first)}${unitLabel} over ${spanLabel} (${formatSigned(slope, 2)}/day, r²=${round(rSquared, 3)})`
+    verb === 'unchanged'
+      ? `Unchanged at ${formatMetricValue(last, unit)} over ${formatSpan(spanDays)}`
+      : `${verb === 'increased' ? 'Increased' : 'Decreased'} by ${formatMetricDelta(overallDelta, unit)} over ${formatSpan(spanDays)}, from ${formatMetricValue(first, unit)} to ${formatMetricValue(last, unit)}`
   );
 
-  if (delta6h !== null) {
-    notes.push(`Last 6 h: ${formatSigned(delta6h)}${unitLabel}`);
-  }
+  const windows: Array<[number | null, string]> = [
+    [delta6h, 'last 6 hours'],
+    [delta24h, 'last 24 hours'],
+    [delta7d, 'last 7 days']
+  ];
 
-  if (delta24h !== null) {
-    notes.push(`Last 24 h: ${formatSigned(delta24h)}${unitLabel}`);
-  }
+  for (const [delta, label] of windows) {
+    if (delta === null) {
+      continue;
+    }
 
-  if (delta7d !== null) {
-    notes.push(`Last 7 d: ${formatSigned(delta7d)}${unitLabel}`);
-  }
-
-  if (projectedDaysToCeiling !== null && projectedCeilingDate) {
+    const direction = changeDirection(delta);
     notes.push(
-      `At ${round(slope, 2)}/day, reaches ${ceiling}${series.unit === 'Percent' ? '%' : ''} in ~${Math.round(projectedDaysToCeiling)} days (${projectedCeilingDate.slice(0, 10)})`
+      direction === 'flat'
+        ? `No change in the ${label}`
+        : `${direction === 'up' ? 'Up' : 'Down'} ${formatMetricDelta(delta, unit)} in the ${label}`
     );
   }
 
-  if (recentProjectedDaysToCeiling !== null && pattern === 'rapid-fill') {
-    const eta =
-      recentProjectedDaysToCeiling < 1
-        ? `~${Math.max(1, Math.round(recentProjectedDaysToCeiling * 24))} hours`
-        : `~${round(recentProjectedDaysToCeiling, 1)} days`;
-    notes.push(`At the current 24 h rate, reaches ${ceiling}${series.unit === 'Percent' ? '%' : ''} in ${eta}`);
+  if (ceilingLabel !== null && projectedDaysToCeiling !== null && projectedCeilingDate) {
+    notes.push(`At this rate it reaches ${ceilingLabel} in about ${formatSpan(projectedDaysToCeiling)} (${projectedCeilingDate.slice(0, 10)})`);
+  }
+
+  if (ceilingLabel !== null && recentProjectedDaysToCeiling !== null && pattern === 'rapid-fill') {
+    notes.push(`At the rate of the last 24 hours it reaches ${ceilingLabel} in about ${formatSpan(recentProjectedDaysToCeiling)}`);
   }
 
   if (anomalies.length > 0) {
