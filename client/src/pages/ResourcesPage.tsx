@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { UrgencyBadge } from '@/components/alerts/EnrichmentBadges';
 import { SeverityIndicator } from '@/components/alerts/SeverityIndicator';
+import { ResourceTree, clientKeyFor, type TreeSelection } from '@/components/resources/ResourceTree';
 import { Badge, Button, EmptyState, Input, Notice, Spinner } from '@/components/ui';
 import { useAlertData } from '@/context/AlertDataContext';
 import { formatRelativeTime } from '@/lib/alerts';
@@ -32,6 +33,7 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
   const [search, setSearch] = useState('');
   const [onlyFiring, setOnlyFiring] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('lastAlertAt');
+  const [selection, setSelection] = useState<TreeSelection>({ kind: 'all' });
 
   // Re-fetch whenever the live alert or comment state changes so the table stays current.
   const refreshKey = `${clientSlug ?? ''}|${alerts.length}|${alerts[0]?.id ?? ''}|${alerts[0]?.status ?? ''}|${Object.keys(commentsByAlert).length}`;
@@ -69,6 +71,9 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
     const filtered = resources.filter((resource) => {
+      if (selection.kind === 'client' && clientKeyFor(resource) !== selection.clientKey) return false;
+      if (selection.kind === 'type' && (clientKeyFor(resource) !== selection.clientKey || resource.resourceType !== selection.resourceType)) return false;
+      if (selection.kind === 'resource' && resource.resourceId !== selection.resourceId) return false;
       if (onlyFiring && resource.firingCount === 0) return false;
       if (!term) return true;
       return (
@@ -91,7 +96,7 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
           return new Date(right.lastAlertAt).getTime() - new Date(left.lastAlertAt).getTime();
       }
     });
-  }, [resources, search, onlyFiring, sortKey]);
+  }, [resources, search, onlyFiring, sortKey, selection]);
 
   const totals = useMemo(
     () => ({
@@ -136,7 +141,12 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
         </select>
       </div>
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex min-h-0 flex-1">
+        <div className="w-72 flex-shrink-0">
+          <ResourceTree resources={resources} selection={selection} onSelect={setSelection} onOpenResource={openResource} />
+        </div>
+
+        <div className="min-w-0 flex-1 overflow-auto">
         {error && (
           <Notice tone="error" className="m-4">
             {error}
@@ -149,7 +159,7 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
         )}
         {!isLoading && visible.length === 0 && (
           <EmptyState className="m-6">
-            {resources.length === 0 ? 'No resource has alerted yet. Resources appear here the first time an alert arrives for them.' : 'No resources match the current filter.'}
+            {resources.length === 0 ? 'No resource has alerted yet. Resources appear here the first time an alert arrives for them.' : 'No resources match the current selection or filter.'}
           </EmptyState>
         )}
 
@@ -175,7 +185,7 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
                   className="cursor-pointer bg-[var(--color-surface)] transition-colors hover:bg-[var(--color-hover)]"
                   title={resource.resourceId}
                 >
-                  <td className={`${td} font-medium text-[var(--color-text)]`}>
+                  <td className={`${td} whitespace-nowrap font-medium text-[var(--color-text)]`}>
                     <div className="flex items-center gap-2">
                       <span>{resource.name}</span>
                       {resource.isSimulated && <Badge tone="neutral">SIM</Badge>}
@@ -219,6 +229,7 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
             </tbody>
           </table>
         )}
+        </div>
       </div>
     </div>
   );
