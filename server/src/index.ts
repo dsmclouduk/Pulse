@@ -11,6 +11,7 @@ import { startMetricsPolling } from './lib/metricsService.js';
 import { alertsRouter } from './routes/alerts.js';
 import { metricsRouter } from './routes/metrics.js';
 import { resourcesRouter } from './routes/resources.js';
+import { settingsRouter } from './routes/settings.js';
 import { simulateRouter } from './routes/simulate.js';
 import { statsRouter } from './routes/stats.js';
 import { sseRouter } from './routes/sse.js';
@@ -46,6 +47,7 @@ app.use('/api/alerts', alertEnrichmentRouter);
 app.use('/api/metrics', metricsRouter);
 app.use('/api/resources', resourcesRouter);
 app.use('/api/stats', statsRouter);
+app.use('/api/settings', settingsRouter);
 app.use('/api/simulate', simulateRouter);
 
 app.listen(port, () => {

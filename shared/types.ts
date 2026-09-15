@@ -520,3 +520,41 @@ export interface PriorAlertContext {
   similar: PriorAlertReference[];
   sameResourceCount30d: number;
 }
+
+// ---------------------------------------------------------------------------
+// Settings (read-only summary of effective configuration; secrets never returned)
+// ---------------------------------------------------------------------------
+
+export interface SettingsSummary {
+  generatedAt: string;
+  source: 'environment';
+  agent: {
+    provider: 'auto' | 'anthropic' | 'rule-based';
+    effectiveProvider: 'anthropic' | 'rule-based';
+    model: string;
+    apiKeyConfigured: boolean;
+    timeoutMs: number;
+  };
+  enrichment: {
+    enabled: boolean;
+    timeoutMs: number;
+    cooldownMs: number;
+    onResolved: 'note' | 'skip';
+    historyDays: number;
+  };
+  azure: {
+    credentialsConfigured: boolean;
+    tenantId: string | null;
+    logAnalyticsConfigured: boolean;
+    logAnalyticsWorkspaceId: string | null;
+  };
+  ingest: {
+    globalWebhookSecretConfigured: boolean;
+    simulateEnabled: boolean;
+    publicBaseUrl: string | null;
+  };
+  persistence: {
+    databaseConfigured: boolean;
+    mode: 'prisma' | 'memory';
+  };
+}

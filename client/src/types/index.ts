@@ -13,6 +13,7 @@ export type {
   ResourceHistoryEntry,
   ResourceLastDiagnosis,
   ResourceSummary,
+  SettingsSummary,
   AzureCommonAlertSchema,
   ClientAccountSummary,
   CommentAuthorKind,

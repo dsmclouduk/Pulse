@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { UrgencyBadge } from '@/components/alerts/EnrichmentBadges';
 import { SeverityIndicator } from '@/components/alerts/SeverityIndicator';
+import { ResourceDetailPanel, type ResourceTab } from '@/components/resources/ResourceDetailPanel';
 import { ResourceTree, clientKeyFor, type TreeSelection } from '@/components/resources/ResourceTree';
 import { Badge, Button, EmptyState, Input, Notice, Spinner } from '@/components/ui';
 import { useAlertData } from '@/context/AlertDataContext';
@@ -34,6 +35,8 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
   const [onlyFiring, setOnlyFiring] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('lastAlertAt');
   const [selection, setSelection] = useState<TreeSelection>({ kind: 'all' });
+  const [openResourceId, setOpenResourceId] = useState<string | null>(null);
+  const [resourceTab, setResourceTab] = useState<ResourceTab>('overview');
 
   // Re-fetch whenever the live alert or comment state changes so the table stays current.
   const refreshKey = `${clientSlug ?? ''}|${alerts.length}|${alerts[0]?.id ?? ''}|${alerts[0]?.status ?? ''}|${Object.keys(commentsByAlert).length}`;
@@ -107,9 +110,16 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
     [resources]
   );
 
+  /** Single click opens the resource flyout (keeping the current tab); clicking the open row closes it. */
   function openResource(resource: ResourceSummary) {
+    setOpenResourceId((current) => (current === resource.resourceId ? null : resource.resourceId));
+  }
+
+  function openInFeed(resource: ResourceSummary) {
     navigate(`/alerts?resource=${encodeURIComponent(resource.resourceId)}`);
   }
+
+  const openResource_ = resources.find((resource) => resource.resourceId === openResourceId) ?? null;
 
   const th = 'px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-[var(--color-text-secondary)] border-b border-[var(--color-border)] whitespace-nowrap select-none';
   const td = 'px-3 py-2 border-b border-[var(--color-border)] text-sm align-middle';
@@ -143,10 +153,28 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
 
       <div className="flex min-h-0 flex-1">
         <div className="w-72 flex-shrink-0">
-          <ResourceTree resources={resources} selection={selection} onSelect={setSelection} onOpenResource={openResource} />
+          <ResourceTree
+            resources={resources}
+            selection={(openResource_ ? { kind: 'resource', resourceId: openResource_.resourceId } : selection) as TreeSelection}
+            onSelect={(next) => {
+              if (next.kind === 'resource') {
+                const target = resources.find((resource) => resource.resourceId === next.resourceId);
+                if (target) openResource(target);
+                return;
+              }
+              setOpenResourceId(null);
+              setSelection(next);
+            }}
+            onOpenResource={openInFeed}
+          />
         </div>
 
-        <div className="min-w-0 flex-1 overflow-auto">
+        <div className="relative min-w-0 flex-1 overflow-auto">
+        {openResource_ && (
+          <div className="absolute inset-y-0 right-0 z-20 w-[min(100%,900px)]">
+            <ResourceDetailPanel resource={openResource_} activeTab={resourceTab} onTabChange={setResourceTab} onClose={() => setOpenResourceId(null)} />
+          </div>
+        )}
         {error && (
           <Notice tone="error" className="m-4">
             {error}
@@ -182,7 +210,7 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
                 <tr
                   key={resource.resourceId}
                   onClick={() => openResource(resource)}
-                  className="cursor-pointer bg-[var(--color-surface)] transition-colors hover:bg-[var(--color-hover)]"
+                  className={`cursor-pointer transition-colors hover:bg-[var(--color-hover)] ${openResourceId === resource.resourceId ? 'bg-accent/10' : 'bg-[var(--color-surface)]'}`}
                   title={resource.resourceId}
                 >
                   <td className={`${td} whitespace-nowrap font-medium text-[var(--color-text)]`}>
