@@ -18,11 +18,11 @@ Yes: a temporary service principal with a client secret is the right local answe
 
 ```bash
 # In the Synextra tenant, once:
-az ad sp create-for-rbac --name pulse-dev --skip-assignment --years 0.25
+# --years takes whole years only (default 1); rotate the secret within 90 days by hand.
+az ad sp create-for-rbac --name pulse-dev --role "Monitoring Reader" --scopes /subscriptions/<testSub>
 # → appId (AZURE_CLIENT_ID), password (AZURE_CLIENT_SECRET), tenant (AZURE_TENANT_ID)
 
 # Read-only roles on the test subscription (or resource group), matching the read-only posture:
-az role assignment create --assignee <appId> --role "Monitoring Reader"     --scope /subscriptions/<testSub>
 az role assignment create --assignee <appId> --role "Log Analytics Reader"  --scope /subscriptions/<testSub>
 az role assignment create --assignee <appId> --role "Reader"                --scope /subscriptions/<testSub>
 ```
@@ -52,14 +52,18 @@ One small VM is enough for the demo scenarios; the following creates everything 
 | VM Insights DCR | classic InsightsMetrics DCR (`\VmInsights\DetailedMetrics`, 60 s) to the workspace | `az monitor data-collection rule create --rule-file dcr-vminsights.json` |
 | Azure Monitor Agent | extension on the VM | `az vm extension set --name AzureMonitorWindowsAgent --publisher Microsoft.Azure.Monitor` |
 | DCR association | link VM to DCR | `az monitor data-collection rule association create` |
-| Action group | webhook to the ngrok URL, common schema | `az monitor action-group create --action webhook pulse <url> useCommonAlertSchema` |
+| Action group | webhook to `<ngrok>/api/webhook/azure-alerts/<client webhook secret>`, common schema | `az monitor action-group create --action webhook pulse <url> usecommonalertschema` |
 | CPU alert (platform metric) | Percentage CPU > 5 for 1 min, Sev2, auto-mitigate | `az monitor metrics alert create` |
 | Disk alert (guest, log) | `InsightsMetrics` LogicalDisk FreeSpacePercentage < 90 split by `_ResourceId`, 5-min frequency | `az monitor scheduled-query create` |
 | Service Health alert | subscription scope | `az monitor activity-log alert create` |
 
 Breach on demand: CPU with a PowerShell busy loop; disk with `fsutil file createnew C:\fill.bin <bytes>`. Set `LOG_ANALYTICS_WORKSPACE_ID` to the workspace's customer ID so the disk alert's history comes from Log Analytics. Expect the log-based alert to lag 5–15 minutes; the metric alert fires within about 2 minutes.
 
-These commands are the seed of the baseline script generator (#36); capture them as a runnable `scripts/azure/test-estate.sh` so the estate can be rebuilt.
+These commands are the seed of the baseline script generator (#36); `scripts/azure/test-estate.sh` runs them so the estate can be rebuilt.
+
+Use the **client account's** webhook secret (Settings → Clients, or `GET /api/admin/clients`) rather than the global `WEBHOOK_SECRET`: only alerts that resolve to a client account are persisted, scoped and enriched with that client's prior-alert history. The global secret works but lands the alert unscoped and memory-only.
+
+Gotchas found running this for real on Windows: Azure caps Windows computer names at 15 characters, so the VM needs `--computer-name` set separately; the DCR and scheduled-query commands need the `monitor-control-service` and `scheduled-query` CLI extensions; under Git Bash a `/tmp` path is invisible to the Windows `az`, so the DCR body is passed through `cygpath`; and the scheduled-query `--condition` needs the metric column and query placeholder quoted (`avg 'FreePct' from 'FreePctQuery' < 90 resource id _ResourceId`).
 
 ## 5. Outside Azure
 
