@@ -7,7 +7,7 @@ import type { SidebarSeverityLevel } from '@/components/layout/Sidebar';
 import { AlertToolbar } from '@/components/alerts/AlertToolbar';
 import { AlertTabBar } from '@/components/alerts/AlertTabBar';
 import { AlertTable, DEFAULT_PINNED_WIDTH } from '@/components/alerts/AlertTable';
-import { AlertDetailPanel, type DetailTab } from '@/components/alerts/AlertDetailPanel';
+import { AlertDetailPanel, isDetailTab, type DetailTab } from '@/components/alerts/AlertDetailPanel';
 import { useAlertData } from '@/context/AlertDataContext';
 import { DEFAULT_FILTERS, filterAndSort, type AlertFilters, type SortField } from '@/lib/alertFilters';
 
@@ -46,7 +46,7 @@ export function AlertsPage({ alerts, sidebarSeverityFilter, onClearSidebarFilter
 
     if (requested) {
       setSelectedAlertId(requested);
-      if (tab === 'metrics' || tab === 'diagnosis' || tab === 'overview') {
+      if (isDetailTab(tab)) {
         setActiveTab(tab);
       }
       setFilters((prev) => ({ ...prev, showSimulated: true }));

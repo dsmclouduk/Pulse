@@ -95,7 +95,7 @@ function ScenarioCard({ preset, selected, onSelect }: Readonly<{ preset: Scenari
     <button
       type="button"
       onClick={onSelect}
-      className={`flex w-full items-start gap-3 rounded-md border p-3 text-left transition-colors ${
+      className={`flex w-full min-w-0 items-start gap-3 overflow-hidden rounded-md border p-3 text-left transition-colors ${
         selected ? 'border-accent bg-accent/5 ring-1 ring-accent/40' : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-hover)]'
       }`}
     >

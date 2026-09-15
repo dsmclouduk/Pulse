@@ -6,7 +6,7 @@ interface SimulatePageProps {
 
 export function SimulatePage({ clientSlug }: Readonly<SimulatePageProps>) {
   return (
-    <div className="mx-auto max-w-7xl p-6">
+    <div className="w-full p-6">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-[var(--color-text)]">Alert simulation</h2>

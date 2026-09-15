@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { AlertCommentsTab } from '@/components/alerts/AlertCommentsTab';
+import { AlertCommentsTab, isDiagnosisThread } from '@/components/alerts/AlertCommentsTab';
 import { AlertMetricsTab } from '@/components/alerts/AlertMetricsTab';
 import { EnrichmentStatePill, UrgencyBadge } from '@/components/alerts/EnrichmentBadges';
 import { LagBadge } from '@/components/alerts/LagBadge';
@@ -10,7 +10,11 @@ import { useAlertComments, useAlertEnrichment, useLatestDiagnosis } from '@/cont
 import { formatAbsoluteTime, formatRelativeTime, shortenResourceId } from '@/lib/alerts';
 import type { AlertEvent } from '@/types';
 
-export type DetailTab = 'overview' | 'metrics' | 'diagnosis';
+export type DetailTab = 'overview' | 'metrics' | 'diagnosis' | 'comments';
+
+export function isDetailTab(value: string | null): value is DetailTab {
+  return value === 'overview' || value === 'metrics' || value === 'diagnosis' || value === 'comments';
+}
 
 interface AlertDetailPanelProps {
   alert: AlertEvent;
@@ -126,10 +130,14 @@ export function AlertDetailPanel({ alert, activeTab, onTabChange, onClose, onRef
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
+  const diagnosisCount = comments.filter(isDiagnosisThread).length;
+  const noteCount = comments.filter((comment) => comment.kind === 'note').length;
+
   const tabs: Array<{ id: DetailTab; label: string; badge?: number }> = [
     { id: 'overview', label: 'Overview' },
     { id: 'metrics', label: 'Metrics' },
-    { id: 'diagnosis', label: 'Diagnosis', badge: comments.length }
+    { id: 'diagnosis', label: 'Diagnosis', badge: diagnosisCount },
+    { id: 'comments', label: 'Comments', badge: noteCount }
   ];
 
   return (
@@ -200,7 +208,8 @@ export function AlertDetailPanel({ alert, activeTab, onTabChange, onClose, onRef
       <div className="min-h-0 flex-1 overflow-auto">
         {activeTab === 'overview' && <OverviewTab alert={alert} />}
         {activeTab === 'metrics' && <AlertMetricsTab alert={alert} />}
-        {activeTab === 'diagnosis' && <AlertCommentsTab alert={alert} />}
+        {activeTab === 'diagnosis' && <AlertCommentsTab alert={alert} mode="diagnosis" />}
+        {activeTab === 'comments' && <AlertCommentsTab alert={alert} mode="comments" />}
       </div>
     </aside>
   );

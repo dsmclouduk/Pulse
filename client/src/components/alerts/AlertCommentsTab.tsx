@@ -7,8 +7,19 @@ import { formatAbsoluteTime, formatRelativeTime } from '@/lib/alerts';
 import { Markdown } from '@/lib/markdown';
 import type { AlertComment, AlertEvent } from '@/types';
 
+/**
+ * `diagnosis` shows the agent's diagnoses and system status notes with a re-run action.
+ * `comments` shows operator notes with a composer (future home for @mentions of users or the agent).
+ */
+export type CommentsMode = 'diagnosis' | 'comments';
+
 interface AlertCommentsTabProps {
   alert: AlertEvent;
+  mode: CommentsMode;
+}
+
+export function isDiagnosisThread(comment: AlertComment): boolean {
+  return comment.kind === 'diagnosis' || comment.kind === 'status';
 }
 
 function AuthorAvatar({ comment }: Readonly<{ comment: AlertComment }>) {
@@ -17,7 +28,7 @@ function AuthorAvatar({ comment }: Readonly<{ comment: AlertComment }>) {
     comment.author.kind === 'agent'
       ? 'bg-accent text-white'
       : comment.author.kind === 'system'
-        ? 'bg-[var(--color-header)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
+        ? 'border border-[var(--color-border)] bg-[var(--color-header)] text-[var(--color-text-secondary)]'
         : 'bg-sev-ok/20 text-sev-ok';
 
   return (
@@ -54,7 +65,11 @@ function CommentCard({ comment }: Readonly<{ comment: AlertComment }>) {
         <header className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-text-secondary)]">
           <span className="font-semibold text-[var(--color-text)]">{comment.author.name}</span>
           {isDiagnosis && metadata?.urgency && <UrgencyBadge urgency={metadata.urgency} />}
-          {isDiagnosis && metadata?.isFallback && <Badge tone="neutral" title="No LLM key configured; deterministic rule-based diagnosis">rule-based</Badge>}
+          {isDiagnosis && metadata?.isFallback && (
+            <Badge tone="neutral" title="No LLM key configured; deterministic rule-based diagnosis">
+              rule-based
+            </Badge>
+          )}
           {isDiagnosis && metadata?.enrichmentTrigger === 'rerun' && <Badge tone="neutral">re-run</Badge>}
           {isStatus && <Badge tone="neutral">system</Badge>}
           <span className="ml-auto" title={formatAbsoluteTime(comment.createdAt)}>
@@ -69,7 +84,11 @@ function CommentCard({ comment }: Readonly<{ comment: AlertComment }>) {
             {metadata.model && <span>model {metadata.model}</span>}
             {metadata.provider && !metadata.model && <span>provider {metadata.provider}</span>}
             {metadata.confidence !== undefined && <span>confidence {Math.round(metadata.confidence * 100)}%</span>}
-            {metadata.usage && <span>{metadata.usage.inputTokens} in / {metadata.usage.outputTokens} out tokens</span>}
+            {metadata.usage && (
+              <span>
+                {metadata.usage.inputTokens} in / {metadata.usage.outputTokens} out tokens
+              </span>
+            )}
             {metadata.durationMs !== undefined && <span>{(metadata.durationMs / 1000).toFixed(1)} s</span>}
             {metadata.trend && <span>trend {metadata.trend.pattern}</span>}
           </footer>
@@ -79,16 +98,10 @@ function CommentCard({ comment }: Readonly<{ comment: AlertComment }>) {
   );
 }
 
-export function AlertCommentsTab({ alert }: Readonly<AlertCommentsTabProps>) {
-  const comments = useAlertComments(alert.id);
-  const status = useAlertEnrichment(alert.id);
+/** Hydrates the full thread once per alert (SSE only carries comments since connect). */
+function useHydrateComments(alert: AlertEvent): void {
   const { mergeComments } = useAlertData();
-  const [draft, setDraft] = useState('');
-  const [isPosting, setIsPosting] = useState(false);
-  const [isRerunning, setIsRerunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Hydrate the full thread when the tab opens (SSE only carries comments since connect).
   useEffect(() => {
     const controller = new AbortController();
 
@@ -109,35 +122,14 @@ export function AlertCommentsTab({ alert }: Readonly<AlertCommentsTabProps>) {
     void load();
     return () => controller.abort();
   }, [alert.id, alert.clientSlug, mergeComments]);
+}
 
-  async function postNote(): Promise<void> {
-    const body = draft.trim();
-
-    if (!body) return;
-
-    setIsPosting(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/alerts/comments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alertId: alert.id, body, clientSlug: alert.clientSlug })
-      });
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(payload.error ?? `Failed to post note (${response.status})`);
-      }
-
-      mergeComments([(await response.json()) as AlertComment]);
-      setDraft('');
-    } catch (postError) {
-      setError(postError instanceof Error ? postError.message : 'Failed to post note.');
-    } finally {
-      setIsPosting(false);
-    }
-  }
+function DiagnosisThread({ alert }: Readonly<{ alert: AlertEvent }>) {
+  const comments = useAlertComments(alert.id).filter(isDiagnosisThread);
+  const status = useAlertEnrichment(alert.id);
+  const [isRerunning, setIsRerunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const running = isEnrichmentActive(status?.state);
 
   async function rerun(): Promise<void> {
     setIsRerunning(true);
@@ -161,18 +153,15 @@ export function AlertCommentsTab({ alert }: Readonly<AlertCommentsTabProps>) {
     }
   }
 
-  const running = isEnrichmentActive(status?.state);
-
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2">
         <EnrichmentStatePill status={status} />
-        {status?.message && !running && status.state !== 'complete' && (
+        {status?.message && status.state !== 'complete' && (
           <span className="truncate text-[11px] text-[var(--color-text-secondary)]" title={status.message}>
             {status.message}
           </span>
         )}
-        {running && status?.message && <span className="truncate text-[11px] text-[var(--color-text-secondary)]">{status.message}</span>}
         <div className="flex-1" />
         <Button size="sm" variant="secondary" onClick={() => void rerun()} loading={isRerunning} disabled={running} title="Fetch history again and ask the agent for a fresh diagnosis">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -184,11 +173,58 @@ export function AlertCommentsTab({ alert }: Readonly<AlertCommentsTabProps>) {
       </div>
 
       <div className="flex-1 space-y-3 overflow-auto p-3">
-        {comments.length === 0 && !running && (
-          <EmptyState>No comments yet. The agent posts a diagnosis here when enrichment completes, and you can add notes below.</EmptyState>
-        )}
-        {comments.length === 0 && running && (
-          <Notice tone="info">Pulse Agent is analysing this alert. The diagnosis will appear here in a moment.</Notice>
+        {error && <Notice tone="error">{error}</Notice>}
+        {comments.length === 0 && !running && <EmptyState>No diagnosis yet. The agent posts one here when enrichment completes.</EmptyState>}
+        {comments.length === 0 && running && <Notice tone="info">Pulse Agent is analysing this alert. The diagnosis will appear here in a moment.</Notice>}
+        {comments.map((comment) => (
+          <CommentCard key={comment.id} comment={comment} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CommentsThread({ alert }: Readonly<{ alert: AlertEvent }>) {
+  const comments = useAlertComments(alert.id).filter((comment) => comment.kind === 'note');
+  const { mergeComments } = useAlertData();
+  const [draft, setDraft] = useState('');
+  const [isPosting, setIsPosting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function postNote(): Promise<void> {
+    const body = draft.trim();
+
+    if (!body) return;
+
+    setIsPosting(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/alerts/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alertId: alert.id, body, clientSlug: alert.clientSlug })
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? `Failed to post comment (${response.status})`);
+      }
+
+      mergeComments([(await response.json()) as AlertComment]);
+      setDraft('');
+    } catch (postError) {
+      setError(postError instanceof Error ? postError.message : 'Failed to post comment.');
+    } finally {
+      setIsPosting(false);
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex-1 space-y-3 overflow-auto p-3">
+        {comments.length === 0 && (
+          <EmptyState>No comments yet. Leave a note for the team below. Tagging people or the agent with @ is coming later.</EmptyState>
         )}
         {comments.map((comment) => (
           <CommentCard key={comment.id} comment={comment} />
@@ -205,7 +241,7 @@ export function AlertCommentsTab({ alert }: Readonly<AlertCommentsTabProps>) {
           <Textarea
             rows={2}
             value={draft}
-            placeholder="Add a note for the team… (Ctrl+Enter to post)"
+            placeholder="Write a comment… (Ctrl+Enter to post)"
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
@@ -216,10 +252,16 @@ export function AlertCommentsTab({ alert }: Readonly<AlertCommentsTabProps>) {
             className="flex-1"
           />
           <Button variant="primary" onClick={() => void postNote()} loading={isPosting} disabled={!draft.trim()}>
-            Post note
+            Post
           </Button>
         </div>
       </div>
     </div>
   );
+}
+
+export function AlertCommentsTab({ alert, mode }: Readonly<AlertCommentsTabProps>) {
+  useHydrateComments(alert);
+
+  return mode === 'diagnosis' ? <DiagnosisThread alert={alert} /> : <CommentsThread alert={alert} />;
 }

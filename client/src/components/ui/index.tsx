@@ -11,7 +11,7 @@ interface CardProps {
 export function Card({ children, className = '', padded = true }: Readonly<CardProps>) {
   return (
     <section
-      className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] ${padded ? 'p-4' : ''} ${className}`}
+      className={`min-w-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] ${padded ? 'p-4' : ''} ${className}`}
     >
       {children}
     </section>
