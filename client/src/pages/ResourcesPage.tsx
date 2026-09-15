@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 
 import { UrgencyBadge } from '@/components/alerts/EnrichmentBadges';
 import { SeverityIndicator } from '@/components/alerts/SeverityIndicator';
+import { AlertDetailPanel, type DetailTab } from '@/components/alerts/AlertDetailPanel';
 import { ResourceDetailPanel, type ResourceTab } from '@/components/resources/ResourceDetailPanel';
 import { ClientOverviewPanel } from '@/components/resources/ClientOverviewPanel';
 import { ResourceTree, clientKeyFor, type TreeSelection } from '@/components/resources/ResourceTree';
 import { Badge, Button, EmptyState, Input, Notice, Spinner } from '@/components/ui';
 import { useAlertData } from '@/context/AlertDataContext';
 import { formatRelativeTime } from '@/lib/alerts';
-import type { ResourceSummary } from '@/types';
+import type { AlertEvent, ResourceSummary } from '@/types';
 
 interface ResourcesPageProps {
   clientSlug: string | null;
@@ -33,6 +34,9 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
   const [selection, setSelection] = useState<TreeSelection>({ kind: 'all' });
   const [openResourceId, setOpenResourceId] = useState<string | null>(null);
   const [resourceTab, setResourceTab] = useState<ResourceTab>('overview');
+  // An alert opened from the resource's Alerts tab stacks on top of it, rather than leaving the page.
+  const [openAlert, setOpenAlert] = useState<AlertEvent | null>(null);
+  const [alertTab, setAlertTab] = useState<DetailTab>('overview');
 
   // Re-fetch whenever the live alert or comment state changes so the table stays current.
   const refreshKey = `${clientSlug ?? ''}|${alerts.length}|${alerts[0]?.id ?? ''}|${alerts[0]?.status ?? ''}|${Object.keys(commentsByAlert).length}`;
@@ -168,6 +172,7 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
                 return;
               }
               setOpenResourceId(null);
+              setOpenAlert(null);
               setSelection(next);
             }}
             onOpenResource={openInFeed}
@@ -178,7 +183,27 @@ export function ResourcesPage({ clientSlug }: Readonly<ResourcesPageProps>) {
         {/* Fills the content pane so the panel meets the resource tree, with no sliver of table showing. */}
         {openResource_ && (
           <div className="absolute inset-0 z-20">
-            <ResourceDetailPanel resource={openResource_} activeTab={resourceTab} onTabChange={setResourceTab} onClose={() => setOpenResourceId(null)} />
+            {openAlert ? (
+              <AlertDetailPanel
+                alert={openAlert}
+                activeTab={alertTab}
+                onTabChange={setAlertTab}
+                onSelectAlert={(alertId) => {
+                  const next = alerts.find((candidate) => candidate.id === alertId);
+                  if (next) setOpenAlert(next);
+                }}
+                onClose={() => setOpenAlert(null)}
+                backLabel={openResource_.name}
+              />
+            ) : (
+              <ResourceDetailPanel
+                resource={openResource_}
+                activeTab={resourceTab}
+                onTabChange={setResourceTab}
+                onSelectAlert={setOpenAlert}
+                onClose={() => setOpenResourceId(null)}
+              />
+            )}
           </div>
         )}
         {error && (

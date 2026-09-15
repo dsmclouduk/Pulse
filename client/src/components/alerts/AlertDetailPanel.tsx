@@ -26,6 +26,8 @@ interface AlertDetailPanelProps {
   onRefire?: (alert: AlertEvent) => void;
   /** Open another alert (used by the History tab). */
   onSelectAlert?: (alertId: string) => void;
+  /** When the panel sits on top of something else, name it so closing reads as going back. */
+  backLabel?: string;
 }
 
 function DetailRow({ label, value, mono = false }: Readonly<{ label: string; value: string | number | null | undefined; mono?: boolean }>) {
@@ -117,7 +119,7 @@ function OverviewTab({ alert }: Readonly<{ alert: AlertEvent }>) {
  * Right-hand flyout for the selected alert. The parent positions it so its left edge aligns with
  * the end of the pinned Resource + Severity columns, so rows stay clickable while it is open.
  */
-export function AlertDetailPanel({ alert, activeTab, onTabChange, onClose, onRefire, onSelectAlert }: Readonly<AlertDetailPanelProps>) {
+export function AlertDetailPanel({ alert, activeTab, onTabChange, onClose, onRefire, onSelectAlert, backLabel }: Readonly<AlertDetailPanelProps>) {
   const enrichment = useAlertEnrichment(alert.id);
   const comments = useAlertComments(alert.id);
 
@@ -149,6 +151,20 @@ export function AlertDetailPanel({ alert, activeTab, onTabChange, onClose, onRef
       className="flex h-full flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.35)]"
       aria-label="Alert detail"
     >
+      {backLabel && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex items-center gap-1.5 border-b border-[var(--color-border)] px-4 py-1.5 text-left text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
+          title="Back (Esc)"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+            <path d="M7.5 2.5 4 6l3.5 3.5" />
+          </svg>
+          <span className="truncate">Back to {backLabel}</span>
+        </button>
+      )}
+
       {/* Title row */}
       <div className="flex items-start gap-3 border-b border-[var(--color-border)] px-4 pb-2 pt-3">
         <div className="min-w-0 flex-1">

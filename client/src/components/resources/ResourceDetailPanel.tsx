@@ -8,7 +8,7 @@ import { MetricContextPanel } from '@/components/MetricContextPanel';
 import { Badge, Button, EmptyState, Notice, Spinner, StatTile } from '@/components/ui';
 import { useAlertData } from '@/context/AlertDataContext';
 import { formatAbsoluteTime, formatRelativeTime } from '@/lib/alerts';
-import type { ResourceHistory, ResourceSummary } from '@/types';
+import type { AlertEvent, ResourceHistory, ResourceSummary } from '@/types';
 
 export type ResourceTab = 'overview' | 'alerts' | 'metrics';
 
@@ -17,6 +17,8 @@ interface ResourceDetailPanelProps {
   activeTab: ResourceTab;
   onTabChange: (tab: ResourceTab) => void;
   onClose: () => void;
+  /** Handle an alert click in place. Without it the Alerts tab navigates to the feed instead. */
+  onSelectAlert?: (alert: AlertEvent) => void;
 }
 
 function formatDuration(ms: number | null): string {
@@ -119,7 +121,11 @@ function OverviewTab({ resource, history }: Readonly<{ resource: ResourceSummary
   );
 }
 
-function AlertsTab({ history, error }: Readonly<{ history: ResourceHistory | null; error: string | null }>) {
+function AlertsTab({
+  history,
+  error,
+  onSelectAlert
+}: Readonly<{ history: ResourceHistory | null; error: string | null; onSelectAlert?: (alert: AlertEvent) => void }>) {
   const navigate = useNavigate();
 
   if (error) {
@@ -148,9 +154,11 @@ function AlertsTab({ history, error }: Readonly<{ history: ResourceHistory | nul
         <li key={entry.alert.id}>
           <button
             type="button"
-            onClick={() => navigate(`/alerts?alert=${encodeURIComponent(entry.alert.id)}`)}
+            onClick={() =>
+              onSelectAlert ? onSelectAlert(entry.alert) : navigate(`/alerts?alert=${encodeURIComponent(entry.alert.id)}`)
+            }
             className="flex w-full flex-col gap-1 px-3 py-2 text-left hover:bg-[var(--color-hover)]"
-            title="Open in the alert feed"
+            title={onSelectAlert ? 'Open this alert' : 'Open in the alert feed'}
           >
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <SeverityIndicator severity={entry.alert.severity} status={entry.alert.status} />
@@ -185,7 +193,7 @@ function AlertsTab({ history, error }: Readonly<{ history: ResourceHistory | nul
 }
 
 /** Right-hand flyout for a resource: overview stats, its alert history, and live Azure Monitor metrics. */
-export function ResourceDetailPanel({ resource, activeTab, onTabChange, onClose }: Readonly<ResourceDetailPanelProps>) {
+export function ResourceDetailPanel({ resource, activeTab, onTabChange, onClose, onSelectAlert }: Readonly<ResourceDetailPanelProps>) {
   const navigate = useNavigate();
   const { history, error } = useResourceHistory(resource);
 
@@ -256,7 +264,7 @@ export function ResourceDetailPanel({ resource, activeTab, onTabChange, onClose 
 
       <div className="min-h-0 flex-1 overflow-auto">
         {activeTab === 'overview' && <OverviewTab resource={resource} history={history} />}
-        {activeTab === 'alerts' && <AlertsTab history={history} error={error} />}
+        {activeTab === 'alerts' && <AlertsTab history={history} error={error} onSelectAlert={onSelectAlert} />}
         {activeTab === 'metrics' && (
           <div className="p-3">
             {resource.isSimulated ? (
