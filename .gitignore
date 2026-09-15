@@ -4,6 +4,3 @@ coverage/
 .env
 .DS_Store
 *.log
-
-# local tunnel config (contains authtoken)
-ngrok.yml

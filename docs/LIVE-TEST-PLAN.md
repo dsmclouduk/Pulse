@@ -35,8 +35,7 @@ Verify from the laptop: `GET /api/settings/summary` shows the service principal 
 
 Azure action groups need a public HTTPS URL. ngrok's free tier gives one static domain, which avoids re-editing the action group every restart.
 
-- `ngrok.yml.example` in the repo defines a `pulse` tunnel to port 3001; copy to `ngrok.yml` (gitignored), set your authtoken and static domain, then `npm run tunnel`.
-- Set `APP_SERVICE_URL=https://<your-static>.ngrok-free.app` in `.env` so Settings shows the correct action-group URL.
+- Set `APP_SERVICE_URL=https://<your-static>.ngrok-free.dev` in `.env`. `npm run tunnel` runs `ngrok http 3001 --url <that domain>` for you (or run the command yourself); Settings shows the correct action-group URL from the same value.
 - Action group webhook URL: `https://<your-static>.ngrok-free.app/api/webhook/azure-alerts/<WEBHOOK_SECRET>` with "Use common alert schema" on. No header needed or possible.
 - ngrok's inspector at http://127.0.0.1:4040 shows every Azure POST and Pulse's response, which is the fastest way to debug payload or secret problems.
 

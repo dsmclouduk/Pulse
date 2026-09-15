@@ -11,7 +11,7 @@
     "dev:all": "docker compose up -d db && npm run dev",
     "db:local": "docker compose up -d db",
     "db:local:down": "docker compose down",
-    "tunnel": "ngrok start --config ngrok.yml pulse",
+    "tunnel": "node scripts/dev/tunnel.mjs",
     "test": "npm test --workspace server",
     "build": "npm run build --workspace server && npm run build --workspace client",
     "db:generate": "prisma generate",
