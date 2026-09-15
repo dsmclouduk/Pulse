@@ -291,23 +291,10 @@ export async function persistAlert(
 }
 
 export async function listAlerts(filters: AlertQueryFilters = {}): Promise<AlertEvent[]> {
+  const memoryAlerts = getMemoryAlerts().filter((alert) => matchesQueryFilters(alert, filters));
+
   if (!isPersistenceConfigured()) {
-    const alerts = getMemoryAlerts();
-    return alerts.filter((alert) => {
-      if (filters.clientAccountId && alert.clientAccountId !== filters.clientAccountId) {
-        return false;
-      }
-
-      if (filters.clientSlug && alert.clientSlug !== filters.clientSlug) {
-        return false;
-      }
-
-      if (filters.subscriptionId && alert.subscriptionId !== filters.subscriptionId) {
-        return false;
-      }
-
-      return true;
-    });
+    return memoryAlerts;
   }
 
   const persistedAlerts = await prisma.alertEventRecord.findMany({
@@ -322,25 +309,23 @@ export async function listAlerts(filters: AlertQueryFilters = {}): Promise<Alert
     take: ALERT_LIMIT
   });
 
-  if (persistedAlerts.length === 0) {
-    return getMemoryAlerts().filter((alert) => {
-      if (filters.clientAccountId && alert.clientAccountId !== filters.clientAccountId) {
-        return false;
-      }
+  // Alerts that never resolved to a client account are memory-only, so the two sources have to be
+  // merged: returning the database alone would silently drop unscoped alerts (they still arrive over
+  // SSE, so they would appear live and then vanish on refresh). Persisted wins on id collisions.
+  const merged = new Map<string, AlertEvent>();
 
-      if (filters.clientSlug && alert.clientSlug !== filters.clientSlug) {
-        return false;
-      }
-
-      if (filters.subscriptionId && alert.subscriptionId !== filters.subscriptionId) {
-        return false;
-      }
-
-      return true;
-    });
+  for (const alert of memoryAlerts) {
+    merged.set(alert.id, alert);
   }
 
-  return persistedAlerts.map(mapStoredAlert);
+  for (const record of persistedAlerts) {
+    const alert = mapStoredAlert(record);
+    merged.set(alert.id, alert);
+  }
+
+  return [...merged.values()]
+    .sort((left, right) => new Date(right.receivedAt).getTime() - new Date(left.receivedAt).getTime())
+    .slice(0, ALERT_LIMIT);
 }
 
 function matchesQueryFilters(alert: AlertEvent, filters: AlertQueryFilters): boolean {
