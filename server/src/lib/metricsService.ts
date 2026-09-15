@@ -41,6 +41,7 @@ interface MetricsApiResponse {
       localizedValue?: string;
     };
     timeseries?: Array<{
+      metadatavalues?: Array<{ name: { value: string; localizedValue?: string }; value: string }>;
       data?: Array<{
         timeStamp: string;
         average?: number;
@@ -59,6 +60,26 @@ type MetricsApiPoint = NonNullable<MetricsApiTimeseries['data']>[number];
 interface ResourceMetricsOptions {
   forceRefresh?: boolean;
   preferredMetricName?: string;
+}
+
+/** Parameterised ARM metrics query, shared by the context poller and the alert-history provider. */
+export interface ArmMetricsQuery {
+  resourceId: string;
+  metricName: string;
+  namespace?: string;
+  aggregation: MetricAggregation;
+  timespan: { start: string; end: string };
+  interval: string;
+  /** OData $filter for dimensions, e.g. `LUN eq '0'`. */
+  filter?: string;
+  signal?: AbortSignal;
+}
+
+export interface ArmMetricsQueryResult {
+  /** One series per dimension combination returned by Azure. */
+  series: MetricSeries[];
+  interval: string | null;
+  timespan: string | null;
 }
 
 const watchedResourceIds = new Set<string>();
@@ -224,21 +245,13 @@ function chooseAggregation(definition: MetricDefinition): MetricAggregation {
   return normaliseAggregation(definition.primaryAggregationType);
 }
 
-function getBestTimeseries(response: MetricsApiResponse): MetricsApiTimeseries | undefined {
-  return response.value?.[0]?.timeseries?.reduce((bestSeries, currentSeries) => {
-    const bestCount = bestSeries?.data?.length ?? 0;
-    const currentCount = currentSeries?.data?.length ?? 0;
-
-    return currentCount > bestCount ? currentSeries : bestSeries;
-  }, response.value?.[0]?.timeseries?.[0]);
-}
-
-async function fetchJson<T>(url: string): Promise<T> {
+async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const accessToken = await getAzureManagementToken();
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`
-    }
+    },
+    signal
   });
 
   if (!response.ok) {
@@ -257,26 +270,8 @@ async function fetchMetricDefinitions(resourceId: string): Promise<MetricDefinit
   return response.value ?? [];
 }
 
-async function fetchMetricSeries(resourceId: string, definition: MetricDefinition): Promise<MetricSeries> {
-  const now = new Date();
-  const start = new Date(now.getTime() - DEFAULT_LOOKBACK_MS);
-  const aggregation = chooseAggregation(definition);
-  const metricsUrl = new URL(`https://management.azure.com${resourceId}/providers/microsoft.insights/metrics`);
-
-  metricsUrl.searchParams.set('api-version', METRICS_API_VERSION);
-  metricsUrl.searchParams.set('metricnames', definition.name.value);
-  metricsUrl.searchParams.set('timespan', `${start.toISOString()}/${now.toISOString()}`);
-  metricsUrl.searchParams.set('interval', DEFAULT_INTERVAL);
-  metricsUrl.searchParams.set('aggregation', toAggregationQueryValue(aggregation));
-  metricsUrl.searchParams.set('AutoAdjustTimegrain', 'true');
-
-  if (definition.namespace) {
-    metricsUrl.searchParams.set('metricnamespace', definition.namespace);
-  }
-
-  const response = await fetchJson<MetricsApiResponse>(metricsUrl.toString());
-  const bestTimeseries = getBestTimeseries(response);
-  const points: MetricPoint[] = (bestTimeseries?.data ?? []).map((point: MetricsApiPoint) => ({
+function mapPoints(timeseries: MetricsApiTimeseries | undefined): MetricPoint[] {
+  return (timeseries?.data ?? []).map((point: MetricsApiPoint) => ({
     timestamp: point.timeStamp,
     average: point.average,
     minimum: point.minimum,
@@ -284,17 +279,96 @@ async function fetchMetricSeries(resourceId: string, definition: MetricDefinitio
     total: point.total,
     count: point.count
   }));
+}
+
+function dimensionLabel(timeseries: MetricsApiTimeseries): string {
+  const values = timeseries.metadatavalues ?? [];
+
+  if (values.length === 0) {
+    return '';
+  }
+
+  return ` [${values.map((entry) => `${entry.name.value}=${entry.value}`).join(', ')}]`;
+}
+
+/**
+ * Runs a single ARM metrics query and returns every dimension series Azure hands back.
+ * Callers decide which series matters; the poller keeps the largest, the alert-history
+ * provider matches on dimensions.
+ */
+export async function queryArmMetrics(query: ArmMetricsQuery): Promise<ArmMetricsQueryResult> {
+  const metricsUrl = new URL(`https://management.azure.com${query.resourceId}/providers/microsoft.insights/metrics`);
+
+  metricsUrl.searchParams.set('api-version', METRICS_API_VERSION);
+  metricsUrl.searchParams.set('metricnames', query.metricName);
+  metricsUrl.searchParams.set('timespan', `${query.timespan.start}/${query.timespan.end}`);
+  metricsUrl.searchParams.set('interval', query.interval);
+  metricsUrl.searchParams.set('aggregation', toAggregationQueryValue(query.aggregation));
+  metricsUrl.searchParams.set('AutoAdjustTimegrain', 'true');
+
+  if (query.namespace) {
+    metricsUrl.searchParams.set('metricnamespace', query.namespace);
+  }
+
+  if (query.filter) {
+    metricsUrl.searchParams.set('$filter', query.filter);
+  }
+
+  const response = await fetchJson<MetricsApiResponse>(metricsUrl.toString(), query.signal);
+  const metric = response.value?.[0];
+  const timeseriesList = metric?.timeseries ?? [];
+
+  const series: MetricSeries[] = (timeseriesList.length > 0 ? timeseriesList : [undefined]).map((timeseries) => ({
+    metricName: metric?.name.value ?? query.metricName,
+    displayName: `${metric?.name.localizedValue ?? metric?.name.value ?? query.metricName}${timeseries ? dimensionLabel(timeseries) : ''}`,
+    description: metric?.displayDescription,
+    unit: metric?.unit ?? 'Unspecified',
+    aggregation: query.aggregation,
+    namespace: query.namespace,
+    points: mapPoints(timeseries),
+    errorCode: metric?.errorCode,
+    errorMessage: metric?.errorMessage
+  }));
 
   return {
-    metricName: response.value?.[0]?.name.value ?? definition.name.value,
-    displayName: response.value?.[0]?.name.localizedValue ?? definition.name.localizedValue ?? definition.name.value,
-    description: response.value?.[0]?.displayDescription,
-    unit: response.value?.[0]?.unit ?? definition.unit ?? 'Unspecified',
+    series,
+    interval: response.interval ?? null,
+    timespan: response.timespan ?? null
+  };
+}
+
+function pickLargestSeries(series: MetricSeries[]): MetricSeries | undefined {
+  return series.reduce<MetricSeries | undefined>((best, current) => {
+    return (current.points.length ?? 0) > (best?.points.length ?? 0) ? current : best;
+  }, series[0]);
+}
+
+async function fetchMetricSeries(resourceId: string, definition: MetricDefinition): Promise<MetricSeries> {
+  const now = new Date();
+  const start = new Date(now.getTime() - DEFAULT_LOOKBACK_MS);
+  const aggregation = chooseAggregation(definition);
+
+  const result = await queryArmMetrics({
+    resourceId,
+    metricName: definition.name.value,
+    namespace: definition.namespace,
+    aggregation,
+    timespan: { start: start.toISOString(), end: now.toISOString() },
+    interval: DEFAULT_INTERVAL
+  });
+
+  const best = pickLargestSeries(result.series);
+
+  return {
+    metricName: best?.metricName ?? definition.name.value,
+    displayName: definition.name.localizedValue ?? definition.name.value,
+    description: best?.description,
+    unit: best?.unit && best.unit !== 'Unspecified' ? best.unit : definition.unit ?? 'Unspecified',
     aggregation,
     namespace: definition.namespace,
-    points,
-    errorCode: response.value?.[0]?.errorCode,
-    errorMessage: response.value?.[0]?.errorMessage
+    points: best?.points ?? [],
+    errorCode: best?.errorCode,
+    errorMessage: best?.errorMessage
   };
 }
 

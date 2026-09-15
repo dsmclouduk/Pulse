@@ -8,6 +8,10 @@ export function getAlerts(): AlertEvent[] {
   return [...alerts];
 }
 
+export function getMemoryAlertById(alertId: string): AlertEvent | undefined {
+  return alerts.find((entry) => entry.id === alertId);
+}
+
 export function upsertAlert(alert: AlertEvent): AlertEvent[] {
   const existingIndex = alerts.findIndex((entry) => entry.id === alert.id);
 

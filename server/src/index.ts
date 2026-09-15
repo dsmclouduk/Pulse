@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 
 import { adminRouter } from './routes/admin.js';
+import { alertEnrichmentRouter } from './routes/alertEnrichment.js';
 import { authRouter } from './routes/auth.js';
 import { startMetricsPolling } from './lib/metricsService.js';
 import { alertsRouter } from './routes/alerts.js';
@@ -39,6 +40,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/webhook', webhookRouter);
 app.use('/api/alerts', alertsRouter);
 app.use('/api/alerts', sseRouter);
+app.use('/api/alerts', alertEnrichmentRouter);
 app.use('/api/metrics', metricsRouter);
 app.use('/api/simulate', simulateRouter);
 

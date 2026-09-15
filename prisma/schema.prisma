@@ -26,6 +26,8 @@ model ClientAccount {
   resources          Resource[]
   alertEvents        AlertEventRecord[]
   dashboards         Dashboard[]
+  alertComments      AlertComment[]
+  alertEnrichments   AlertEnrichment[]
 }
 
 model TenantConnection {
@@ -154,8 +156,8 @@ model AlertEventRecord {
   metricName           String?
   metricValue          Float?
   threshold            Float?
-  description          String?
-  rawPayloadJson       String?
+  description          String?              @db.NVarChar(Max)
+  rawPayloadJson       String?              @db.NVarChar(Max)
   isSimulated          Boolean              @default(false)
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
@@ -163,11 +165,55 @@ model AlertEventRecord {
   azureSubscription    AzureSubscription?   @relation(fields: [azureSubscriptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   site                 Site?                @relation(fields: [siteId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   resource             Resource?            @relation(fields: [resourceIdRef], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  comments             AlertComment[]
+  enrichment           AlertEnrichment?
 
   @@unique([clientAccountId, externalAlertId])
   @@index([clientAccountId, status, receivedAt])
   @@index([azureSubscriptionId, receivedAt])
   @@index([resourceIdRef, receivedAt])
+}
+
+model AlertComment {
+  id                 String           @id @default(cuid())
+  alertEventRecordId String
+  externalAlertId    String
+  clientAccountId    String
+  authorKind         String
+  authorName         String
+  kind               String
+  body               String           @db.NVarChar(Max)
+  metadataJson       String?          @db.NVarChar(Max)
+  createdAt          DateTime         @default(now())
+  alertEvent         AlertEventRecord @relation(fields: [alertEventRecordId], references: [id], onDelete: Cascade)
+  clientAccount      ClientAccount    @relation(fields: [clientAccountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clientAccountId, externalAlertId, createdAt])
+  @@index([alertEventRecordId, createdAt])
+  @@index([clientAccountId, createdAt])
+}
+
+model AlertEnrichment {
+  id                 String           @id @default(cuid())
+  alertEventRecordId String           @unique
+  externalAlertId    String
+  clientAccountId    String
+  state              String
+  trigger            String
+  historySource      String?
+  agentProvider      String?
+  agentModel         String?
+  urgency            String?
+  message            String?          @db.NVarChar(Max)
+  trendJson          String?          @db.NVarChar(Max)
+  historyJson        String?          @db.NVarChar(Max)
+  startedAt          DateTime
+  completedAt        DateTime?
+  updatedAt          DateTime         @updatedAt
+  alertEvent         AlertEventRecord @relation(fields: [alertEventRecordId], references: [id], onDelete: Cascade)
+  clientAccount      ClientAccount    @relation(fields: [clientAccountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clientAccountId, externalAlertId])
 }
 
 model Dashboard {

@@ -1,14 +1,16 @@
 import type { Response } from 'express';
 
-import type { AlertEvent, SSEMessage } from '../../../shared/types.js';
+import type { AlertComment, AlertEnrichmentStatus, AlertEvent, SSEMessage } from '../../../shared/types.js';
+
+export interface AlertScope {
+  clientAccountId?: string;
+  clientSlug?: string;
+  subscriptionId?: string;
+}
 
 interface SSEClientRegistration {
   response: Response;
-  filters?: {
-    clientAccountId?: string;
-    clientSlug?: string;
-    subscriptionId?: string;
-  };
+  filters?: AlertScope;
 }
 
 const sseClients = new Map<string, SSEClientRegistration>();
@@ -17,31 +19,41 @@ function writeMessage(response: Response, message: SSEMessage): void {
   response.write(`data: ${JSON.stringify(message)}\n\n`);
 }
 
-function matchesFilters(alert: AlertEvent, filters: SSEClientRegistration['filters']): boolean {
+/**
+ * Tenant scoping shared by alerts, comments and enrichment status. Every broadcast payload
+ * carries a snapshot of the alert's scope so the same filter applies to all three.
+ */
+export function matchesScope(scope: AlertScope, filters: AlertScope | undefined): boolean {
   if (!filters) {
     return true;
   }
 
-  if (filters.clientAccountId && alert.clientAccountId !== filters.clientAccountId) {
+  if (filters.clientAccountId && scope.clientAccountId !== filters.clientAccountId) {
     return false;
   }
 
-  if (filters.clientSlug && alert.clientSlug !== filters.clientSlug) {
+  if (filters.clientSlug && scope.clientSlug !== filters.clientSlug) {
     return false;
   }
 
-  if (filters.subscriptionId && alert.subscriptionId !== filters.subscriptionId) {
+  if (filters.subscriptionId && scope.subscriptionId !== filters.subscriptionId) {
     return false;
   }
 
   return true;
 }
 
-export function registerClient(
-  clientId: string,
-  response: Response,
-  filters?: SSEClientRegistration['filters']
-): void {
+function broadcastMessage(scope: AlertScope, message: SSEMessage): void {
+  for (const client of sseClients.values()) {
+    if (!matchesScope(scope, client.filters)) {
+      continue;
+    }
+
+    writeMessage(client.response, message);
+  }
+}
+
+export function registerClient(clientId: string, response: Response, filters?: AlertScope): void {
   sseClients.set(clientId, { response, filters });
 }
 
@@ -60,13 +72,20 @@ export function sendInit(clientId: string, alerts: AlertEvent[]): void {
 }
 
 export function broadcast(alert: AlertEvent): void {
-  for (const client of sseClients.values()) {
-    if (!matchesFilters(alert, client.filters)) {
-      continue;
-    }
+  broadcastMessage(alert, { type: 'alert', alert });
+}
 
-    writeMessage(client.response, { type: 'alert', alert });
-  }
+export function broadcastComment(comment: AlertComment): void {
+  broadcastMessage(comment, { type: 'comment', comment });
+}
+
+/** Enrichment status events never carry history points; the client fetches those on demand. */
+export function broadcastEnrichment(status: AlertEnrichmentStatus): void {
+  const trimmed: AlertEnrichmentStatus = status.trend
+    ? { ...status, trend: { ...status.trend, anomalies: status.trend.anomalies.slice(0, 5) } }
+    : status;
+
+  broadcastMessage(status, { type: 'enrichment', enrichment: trimmed });
 }
 
 export function sendPing(clientId: string): void {

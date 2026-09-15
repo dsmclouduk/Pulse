@@ -1,5 +1,10 @@
 import type { AlertEvent, AzureCommonAlertSchema } from '../../../shared/types.js';
-import { clearAlerts, getAlerts as getMemoryAlerts, upsertAlert as upsertMemoryAlert } from './alertStore.js';
+import {
+  clearAlerts,
+  getAlerts as getMemoryAlerts,
+  getMemoryAlertById,
+  upsertAlert as upsertMemoryAlert
+} from './alertStore.js';
 import { prisma } from './prisma.js';
 
 const ALERT_LIMIT = 500;
@@ -336,6 +341,48 @@ export async function listAlerts(filters: AlertQueryFilters = {}): Promise<Alert
   }
 
   return persistedAlerts.map(mapStoredAlert);
+}
+
+function matchesQueryFilters(alert: AlertEvent, filters: AlertQueryFilters): boolean {
+  if (filters.clientAccountId && alert.clientAccountId !== filters.clientAccountId) {
+    return false;
+  }
+
+  if (filters.clientSlug && alert.clientSlug !== filters.clientSlug) {
+    return false;
+  }
+
+  if (filters.subscriptionId && alert.subscriptionId !== filters.subscriptionId) {
+    return false;
+  }
+
+  return true;
+}
+
+export async function getAlertById(alertId: string, filters: AlertQueryFilters = {}): Promise<AlertEvent | null> {
+  const memoryAlert = getMemoryAlertById(alertId);
+
+  if (memoryAlert && matchesQueryFilters(memoryAlert, filters)) {
+    return memoryAlert;
+  }
+
+  if (!isPersistenceConfigured()) {
+    return null;
+  }
+
+  const record = await prisma.alertEventRecord.findFirst({
+    where: {
+      externalAlertId: alertId,
+      clientAccountId: filters.clientAccountId,
+      clientSlugSnapshot: filters.clientSlug,
+      subscriptionExternalId: filters.subscriptionId
+    },
+    orderBy: {
+      receivedAt: 'desc'
+    }
+  });
+
+  return record ? mapStoredAlert(record) : null;
 }
 
 export function clearMemoryAlerts(): void {
