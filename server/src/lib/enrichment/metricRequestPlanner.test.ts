@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 
 import type { AlertEvent } from '../../../../shared/types.js';
 import { getEnrichmentConfig } from './enrichmentConfig.js';
+import { extractMountFromQuery } from '../normalise.js';
 import { isDiskAlert, planMetricHistory } from './metricRequestPlanner.js';
 
 const VM_ID = '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-01';
@@ -84,5 +85,21 @@ describe('metricRequestPlanner', () => {
 
     assert.equal(plan.requests.length, 0);
     assert.equal(plan.primaryIndex, -1);
+  });
+});
+
+describe('extractMountFromQuery', () => {
+  it('reads the mount a disk rule pins in its own query text', () => {
+    const query =
+      'InsightsMetrics | where Namespace == "LogicalDisk" | extend Mount = tostring(todynamic(Tags)["vm.azm.ms/mountId"]) | where Mount == "C:" | project FreePct = Val';
+
+    assert.equal(extractMountFromQuery(query), 'C:');
+  });
+
+  it('returns nothing when the rule splits by mount instead of pinning one', () => {
+    const query = 'InsightsMetrics | extend Mount = tostring(todynamic(Tags)["vm.azm.ms/mountId"]) | project Mount, FreePct = Val';
+
+    assert.equal(extractMountFromQuery(query), undefined);
+    assert.equal(extractMountFromQuery(undefined), undefined);
   });
 });

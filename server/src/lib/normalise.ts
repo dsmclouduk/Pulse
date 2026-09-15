@@ -27,6 +27,21 @@ function extractResourceMetadata(resourceId: string | undefined): { subscription
   };
 }
 
+/**
+ * A log alert only reports the dimensions its rule splits on. When a disk rule pins the mount in its
+ * query text instead of splitting by it, the payload names the resource but not the drive, so read
+ * the mount back out of the query the rule author wrote. Azure never tells us the OS layout, and we
+ * never ask the guest: the mount is either a dimension or it is in the rule's own KQL.
+ */
+export function extractMountFromQuery(searchQuery: string | undefined): string | undefined {
+  if (!searchQuery) {
+    return undefined;
+  }
+
+  const match = /Mount\s*=~?=?\s*"([^"]{1,64})"/i.exec(searchQuery) ?? /mountId"\]\s*==\s*"([^"]{1,64})"/i.exec(searchQuery);
+  return match?.[1];
+}
+
 function extractDimensions(
   dimensions: Array<{ name: string; value: string }> | undefined
 ): Record<string, string> | undefined {
@@ -53,6 +68,22 @@ export function isAzureCommonAlertSchema(payload: unknown): payload is AzureComm
   const maybePayload = payload as Partial<AzureCommonAlertSchema>;
 
   return maybePayload.schemaId === 'azureMonitorCommonAlertSchema' && Boolean(maybePayload.data?.essentials?.alertId);
+}
+
+function withMount(
+  dimensions: Record<string, string> | undefined,
+  mount: string | undefined
+): Record<string, string> | undefined {
+  if (!mount) {
+    return dimensions;
+  }
+
+  // A real dimension always wins: it is what Azure actually evaluated.
+  if (dimensions && (dimensions.Mount ?? dimensions.mount ?? dimensions.mountId)) {
+    return dimensions;
+  }
+
+  return { ...(dimensions ?? {}), Mount: mount };
 }
 
 export function normaliseAzureAlert(payload: AzureCommonAlertSchema, receivedAt: string, isSimulated: boolean): AlertEvent {
@@ -86,7 +117,7 @@ export function normaliseAzureAlert(payload: AzureCommonAlertSchema, receivedAt:
     operator: primaryCondition?.operator,
     description: alertContext?.description ?? essentials.description,
     isSimulated,
-    dimensions: extractDimensions(primaryCondition?.dimensions)
+    dimensions: withMount(extractDimensions(primaryCondition?.dimensions), extractMountFromQuery(primaryCondition?.searchQuery))
   };
 }
 

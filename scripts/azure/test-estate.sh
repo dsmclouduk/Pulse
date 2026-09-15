@@ -92,11 +92,11 @@ az monitor metrics alert create -g "$RG" -n "pulse-synextra-test-vm-cpu-high" \
   --action "$AG_ID" --description "Pulse live test: CPU" \
   --tags pulse-managed=true pulse-client=synextra-test pulse-rule=vm-cpu-high -o none
 
-echo "== Disk log search alert (InsightsMetrics free space, split by _ResourceId)"
+echo "== Disk log search alert (InsightsMetrics free space, split by _ResourceId and Mount)"
 az monitor scheduled-query create -g "$RG" -n "pulse-synextra-test-vm-os-disk-free" \
   --scopes "$LAW_ID" --location "$LOCATION" \
-  --condition "avg 'FreePct' from 'FreePctQuery' < 90 resource id _ResourceId" \
-  --condition-query FreePctQuery='InsightsMetrics | where Origin == "vm.azm.ms" and Namespace == "LogicalDisk" and Name == "FreeSpacePercentage" | extend Mount = tostring(todynamic(Tags)["vm.azm.ms/mountId"]) | where Mount == "C:" | project TimeGenerated, _ResourceId, FreePct = Val' \
+  --condition "avg 'FreePct' from 'FreePctQuery' < 90 resource id _ResourceId where Mount includes *" \
+  --condition-query FreePctQuery='InsightsMetrics | where Origin == "vm.azm.ms" and Namespace == "LogicalDisk" and Name == "FreeSpacePercentage" | extend Mount = tostring(todynamic(Tags)["vm.azm.ms/mountId"]) | project TimeGenerated, _ResourceId, Mount, FreePct = Val' \
   --window-size 15m --evaluation-frequency 5m --severity 2 --auto-mitigate true \
   --action-groups "$AG_ID" --description "Pulse live test: OS disk free space" \
   --tags pulse-managed=true pulse-client=synextra-test pulse-rule=vm-os-disk-free -o none
