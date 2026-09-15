@@ -9,6 +9,7 @@ import type {
 } from '../../../../shared/types.js';
 import { listAlerts, type AlertQueryFilters } from '../alertRepository.js';
 import { listRecentComments } from '../comments/commentRepository.js';
+import { applyScopeNames, loadScopeDirectory } from './scopeDirectory.js';
 
 const SEVERITY_RANK: Record<AlertSeverity, number> = { Sev0: 0, Sev1: 1, Sev2: 2, Sev3: 3, Sev4: 4 };
 const COMMENT_SCAN_LIMIT = 2000;
@@ -139,8 +140,13 @@ export function summariseResources(alerts: AlertEvent[], comments: CommentIndex)
 }
 
 export async function listResourceSummaries(filters: AlertQueryFilters = {}): Promise<ResourceSummary[]> {
-  const [alerts, comments] = await Promise.all([listAlerts(filters), listRecentComments(COMMENT_SCAN_LIMIT, filters)]);
-  return summariseResources(alerts, indexComments(comments));
+  const [alerts, comments, directory] = await Promise.all([
+    listAlerts(filters),
+    listRecentComments(COMMENT_SCAN_LIMIT, filters),
+    loadScopeDirectory()
+  ]);
+
+  return applyScopeNames(summariseResources(alerts, indexComments(comments)), directory);
 }
 
 export async function getResourceHistory(resourceId: string, filters: AlertQueryFilters = {}): Promise<ResourceHistory> {

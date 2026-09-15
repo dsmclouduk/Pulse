@@ -441,6 +441,11 @@ export interface ResourceSummary {
   resourceGroup?: string;
   subscriptionId?: string;
   clientSlug?: string;
+  /** Display names resolved from onboarding records; absent when the scope is unknown to Pulse. */
+  clientName?: string;
+  tenantId?: string;
+  tenantName?: string;
+  subscriptionName?: string;
   firstSeenAt: string;
   lastAlertAt: string;
   alertCount: number;

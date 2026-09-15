@@ -57,6 +57,17 @@ export function clientKeyFor(resource: ResourceSummary): string {
   return resource.clientSlug ? `client:${resource.clientSlug}` : `sub:${resource.subscriptionId ?? 'unknown'}`;
 }
 
+/** Tenant/client display names come from onboarding records; fall back to the raw identifiers. */
+function clientLabel(resource: ResourceSummary): string {
+  return resource.clientName ?? resource.clientSlug ?? resource.subscriptionName ?? 'Unscoped alerts';
+}
+
+function clientSublabel(resource: ResourceSummary): string | undefined {
+  const tenant = resource.tenantName ?? (resource.tenantId ? `tenant ${resource.tenantId.slice(0, 8)}…` : undefined);
+  const subscription = resource.subscriptionName ?? (resource.subscriptionId ? `subscription ${resource.subscriptionId.slice(0, 8)}…` : undefined);
+  return [tenant, subscription].filter(Boolean).join(' · ') || undefined;
+}
+
 function shortType(resourceType: string): string {
   const parts = resourceType.split('/');
   const last = parts[parts.length - 1] ?? resourceType;
@@ -73,8 +84,8 @@ export function buildTree(resources: ResourceSummary[]): ClientNode[] {
     if (!client) {
       client = {
         key,
-        label: resource.clientSlug ?? 'Unscoped alerts',
-        sublabel: resource.clientSlug ? undefined : resource.subscriptionId ? `subscription ${resource.subscriptionId.slice(0, 8)}…` : undefined,
+        label: clientLabel(resource),
+        sublabel: clientSublabel(resource),
         types: [],
         total: 0,
         firing: 0,
@@ -180,7 +191,12 @@ export function ResourceTree({ resources, selection, onSelect, onOpenResource }:
                 <Chevron open={clientOpen} />
               </button>
               <button type="button" onClick={() => onSelect(clientSel)} className={`${rowBase} font-semibold ${isSelected(selection, clientSel) ? rowActive : rowIdle}`} title={client.sublabel}>
-                <span className="truncate">{client.label}</span>
+                <span className="min-w-0 flex-1 truncate text-left">
+                  <span className="block truncate">{client.label}</span>
+                  {client.sublabel && (
+                    <span className="block truncate text-[11px] font-normal text-[var(--color-text-tertiary)]">{client.sublabel}</span>
+                  )}
+                </span>
                 <CountPill firing={client.firing} total={client.total} highest={client.highest} />
               </button>
             </div>
