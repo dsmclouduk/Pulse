@@ -8,6 +8,11 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace server\" \"npm run dev --workspace client\"",
+    "dev:all": "docker compose up -d db && npm run dev",
+    "db:local": "docker compose up -d db",
+    "db:local:down": "docker compose down",
+    "tunnel": "ngrok start --config ngrok.yml pulse",
+    "test": "npm test --workspace server",
     "build": "npm run build --workspace server && npm run build --workspace client",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",

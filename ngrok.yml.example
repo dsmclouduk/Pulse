@@ -1,0 +1,12 @@
+# Copy to ngrok.yml (gitignored), fill in your authtoken and free static domain, then `npm run tunnel`.
+# Point the Azure action group webhook at:
+#   https://<your-static>.ngrok-free.app/api/webhook/azure-alerts/<WEBHOOK_SECRET>
+# and set APP_SERVICE_URL in .env to https://<your-static>.ngrok-free.app so Settings shows the right URL.
+version: 3
+agent:
+  authtoken: YOUR_NGROK_AUTHTOKEN
+endpoints:
+  - name: pulse
+    url: https://YOUR-STATIC-DOMAIN.ngrok-free.app
+    upstream:
+      url: 3001
