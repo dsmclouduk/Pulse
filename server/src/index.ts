@@ -11,6 +11,7 @@ import { hydrateEnrichmentStore } from './lib/enrichment/enrichmentStatusStore.j
 import { startMetricsPolling } from './lib/metricsService.js';
 import { alertsRouter } from './routes/alerts.js';
 import { metricsRouter } from './routes/metrics.js';
+import { onboardingRouter } from './routes/onboarding.js';
 import { resourcesRouter } from './routes/resources.js';
 import { settingsRouter } from './routes/settings.js';
 import { simulateRouter } from './routes/simulate.js';
@@ -46,6 +47,7 @@ app.use('/api/alerts', alertsRouter);
 app.use('/api/alerts', sseRouter);
 app.use('/api/alerts', alertEnrichmentRouter);
 app.use('/api/metrics', metricsRouter);
+app.use('/api/onboarding', onboardingRouter);
 app.use('/api/resources', resourcesRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/settings', settingsRouter);

@@ -6,6 +6,7 @@ import { AlertDataProvider } from '@/context/AlertDataContext';
 import { AppShell } from '@/layouts/AppShell';
 import { AlertsPage } from '@/pages/AlertsPage';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { OnboardingPage } from '@/pages/OnboardingPage';
 import { ResourcesPage } from '@/pages/ResourcesPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { SimulatePage } from '@/pages/SimulatePage';
@@ -15,6 +16,7 @@ import type { SidebarSeverityLevel } from '@/components/layout/Sidebar';
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/resources': 'Resources',
+  '/onboarding': 'Onboard a client',
   '/alerts': 'Alerts',
   '/settings': 'Settings',
   '/simulate': 'Simulate'
@@ -79,6 +81,7 @@ export default function App() {
             />
             <Route path="/dashboard" element={<DashboardPage clientSlug={selectedClientSlug} />} />
             <Route path="/resources" element={<ResourcesPage clientSlug={selectedClientSlug} />} />
+            <Route path="/onboarding" element={<OnboardingPage />} />
             <Route path="/settings" element={<SettingsPage selectedClientSlug={selectedClientSlug} onSelectClientSlug={setSelectedClientSlug} />} />
             <Route path="/simulate" element={<SimulatePage clientSlug={selectedClientSlug} />} />
             <Route path="*" element={<Navigate to="/alerts" replace />} />

@@ -465,6 +465,28 @@ export interface ResourceSummary {
   isSimulated: boolean;
 }
 
+/** A subscription Pulse's identity can reach, and whether a client already owns it. */
+export interface DiscoveredSubscription {
+  subscriptionId: string;
+  displayName: string;
+  state: string;
+  tenantId: string;
+  /** True when the subscription lives in another tenant, i.e. reached through Lighthouse. */
+  isDelegated: boolean;
+  managedByTenantIds: string[];
+  assignedClientSlug?: string;
+  assignedClientName?: string;
+  /** Guessed from the subscription name prefix. A suggestion only; a human confirms it. */
+  suggestedClientName?: string;
+}
+
+export interface SubscriptionDiscoveryResult {
+  credentialsConfigured: boolean;
+  homeTenantId?: string;
+  subscriptions: DiscoveredSubscription[];
+  message?: string;
+}
+
 export interface ClientSubscriptionSummary {
   externalSubscriptionId: string;
   displayName: string;

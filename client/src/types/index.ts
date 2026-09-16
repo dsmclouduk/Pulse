@@ -24,6 +24,8 @@ export type {
   CreateAzureSubscriptionRequest,
   CreateClientAccountRequest,
   CreateTenantConnectionRequest,
+  DiscoveredSubscription,
+  SubscriptionDiscoveryResult,
   DiagnosisUrgency,
   EnrichmentState,
   MetricAggregation,

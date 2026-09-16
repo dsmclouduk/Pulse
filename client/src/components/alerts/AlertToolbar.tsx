@@ -118,7 +118,7 @@ export function AlertToolbar({ filters, onFiltersChange, totalCount, filteredCou
   function removeFilter(type: string) {
     switch (type) {
       case 'status':
-        onFiltersChange({ ...filters, statuses: new Set() });
+        onFiltersChange({ ...filters, statuses: new Set(DEFAULT_FILTERS.statuses) });
         break;
       case 'time':
         onFiltersChange({ ...filters, timeRange: 'all' });

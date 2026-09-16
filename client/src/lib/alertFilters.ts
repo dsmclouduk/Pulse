@@ -13,10 +13,14 @@ export interface AlertFilters {
   sortDirection: 'asc' | 'desc';
 }
 
+/**
+ * Cleared alerts are hidden by default: the feed is a worklist, and a resolved alert needs no
+ * action. Toggling "Cleared" on in the toolbar brings them back.
+ */
 export const DEFAULT_FILTERS: AlertFilters = {
   searchText: '',
   severities: new Set(),
-  statuses: new Set(),
+  statuses: new Set<AlertStatus>(['Fired']),
   signalTypes: new Set(),
   showSimulated: true,
   timeRange: 'all',
@@ -110,11 +114,16 @@ export function filterAndSort(alerts: AlertEvent[], filters: AlertFilters): Aler
   return applySorting(filtered, filters.sortBy, filters.sortDirection);
 }
 
+/** True when the status filter is the default "Fired only", which should not read as a filter. */
+function isDefaultStatusFilter(statuses: Set<AlertStatus>): boolean {
+  return statuses.size === 1 && statuses.has('Fired');
+}
+
 export function getActiveFilterCount(filters: AlertFilters): number {
   let count = 0;
   if (filters.searchText) count += 1;
   if (filters.severities.size > 0) count += 1;
-  if (filters.statuses.size > 0) count += 1;
+  if (filters.statuses.size > 0 && !isDefaultStatusFilter(filters.statuses)) count += 1;
   if (filters.signalTypes.size > 0) count += 1;
   if (!filters.showSimulated) count += 1;
   if (filters.timeRange !== 'all') count += 1;
