@@ -1,0 +1,57 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Delegates one customer subscription to Synextra through Azure Lighthouse, read-only. Deploy in the CUSTOMER tenant against the subscription being delegated: az deployment sub create --location uksouth --template-file delegate-subscription.json --parameters @delegate-subscription.parameters.json. Keep mspOfferName identical across redeployments: the registration definition id is derived from it, so the same name updates the existing delegation in place instead of creating a second one."
+  },
+  "parameters": {
+    "mspOfferName": {
+      "type": "string",
+      "metadata": { "description": "Shown to the customer under Service providers. Must stay stable: it is the identity of the delegation." }
+    },
+    "mspOfferDescription": {
+      "type": "string",
+      "defaultValue": "Read-only monitoring by Synextra. No write access is granted."
+    },
+    "managedByTenantId": {
+      "type": "string",
+      "metadata": { "description": "Synextra tenant id." }
+    },
+    "authorizations": {
+      "type": "array",
+      "metadata": { "description": "Principals in the Synextra tenant and the roles they receive here." }
+    }
+  },
+  "variables": {
+    "mspRegistrationName": "[guid(parameters('mspOfferName'))]",
+    "mspAssignmentName": "[guid(parameters('mspOfferName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedServices/registrationDefinitions",
+      "apiVersion": "2020-02-01-preview",
+      "name": "[variables('mspRegistrationName')]",
+      "properties": {
+        "registrationDefinitionName": "[parameters('mspOfferName')]",
+        "description": "[parameters('mspOfferDescription')]",
+        "managedByTenantId": "[parameters('managedByTenantId')]",
+        "authorizations": "[parameters('authorizations')]"
+      }
+    },
+    {
+      "type": "Microsoft.ManagedServices/registrationAssignments",
+      "apiVersion": "2020-02-01-preview",
+      "name": "[variables('mspAssignmentName')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedServices/registrationDefinitions/', variables('mspRegistrationName'))]"
+      ],
+      "properties": {
+        "registrationDefinitionId": "[resourceId('Microsoft.ManagedServices/registrationDefinitions/', variables('mspRegistrationName'))]"
+      }
+    }
+  ],
+  "outputs": {
+    "mspOfferName": { "type": "string", "value": "[concat('Delegated: ', parameters('mspOfferName'))]" },
+    "authorizations": { "type": "array", "value": "[parameters('authorizations')]" }
+  }
+}

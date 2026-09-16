@@ -1,0 +1,34 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "mspOfferName": {
+      "value": "Synextra Managed Services"
+    },
+    "mspOfferDescription": {
+      "value": "Read-only monitoring by Synextra. No write access is granted; changes are made through BeyondTrust."
+    },
+    "managedByTenantId": {
+      "value": "f9e01f30-5fd9-4e42-993c-d7f969077e7f"
+    },
+    "authorizations": {
+      "value": [
+        {
+          "principalId": "650b3883-3936-4045-88db-32bc44a43a46",
+          "principalIdDisplayName": "Synextra - Monitoring Reader",
+          "roleDefinitionId": "acdd72a7-3385-48ef-bd42-f606fba81ae7"
+        },
+        {
+          "principalId": "650b3883-3936-4045-88db-32bc44a43a46",
+          "principalIdDisplayName": "Synextra - Monitoring Reader",
+          "roleDefinitionId": "43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+        },
+        {
+          "principalId": "650b3883-3936-4045-88db-32bc44a43a46",
+          "principalIdDisplayName": "Synextra - Monitoring Reader",
+          "roleDefinitionId": "73c42c96-874c-492b-b04d-ab87d138a893"
+        }
+      ]
+    }
+  }
+}
