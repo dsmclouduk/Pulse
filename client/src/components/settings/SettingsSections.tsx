@@ -56,11 +56,17 @@ export function IntegrationsSection({ summary }: Readonly<{ summary: SettingsSum
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <Card>
-        <CardHeader eyebrow="Azure" title="Azure access (read-only)" description="One service principal in the Synextra tenant; client subscriptions are delegated to it with Azure Lighthouse." />
-        <Row label="Service principal credentials" value={summary.azure.tenantId ?? '—'} ok={summary.azure.credentialsConfigured} />
-        <Row label="Log Analytics workspace" value={summary.azure.logAnalyticsWorkspaceId ?? '—'} ok={summary.azure.logAnalyticsConfigured} />
+        <CardHeader
+          eyebrow="Azure"
+          title="Azure access (read-only)"
+          description="One identity in the Synextra tenant, in the Synextra - Monitoring Reader group. Client subscriptions reach it through Lighthouse delegations that authorise that group."
+        />
+        <Row label="Home tenant" value={summary.azure.tenantId ?? '—'} ok={summary.azure.credentialsConfigured} />
+        <Row label="Log Analytics workspace (optional)" value={summary.azure.logAnalyticsWorkspaceId ?? 'not needed'} />
         <Notice className="mt-3">
-          Per-client workspaces and delegated-subscription detection are tracked in the Onboarding v1 milestone (#37, #33). Lighthouse template generation is #31.
+          Guest history is queried in resource context, so no workspace id is required; the field above is only the fallback for
+          workspace-context queries. Pulse can see a subscription only when its identity is authorised in that client&apos;s
+          delegation. Runbook: docs/onboarding/LIGHTHOUSE.md. Replacing the client secret with a managed identity is #67.
         </Notice>
       </Card>
 
@@ -69,7 +75,10 @@ export function IntegrationsSection({ summary }: Readonly<{ summary: SettingsSum
         <Row label="Public base URL (APP_SERVICE_URL)" value={summary.ingest.publicBaseUrl ?? window.location.origin} />
         <Row label="Global webhook secret (WEBHOOK_SECRET)" value={summary.ingest.globalWebhookSecretConfigured ? 'set, hidden' : 'missing'} ok={summary.ingest.globalWebhookSecretConfigured} />
         <Row label="Simulation endpoint" value={summary.ingest.simulateEnabled ? 'enabled (dev)' : 'disabled (production)'} />
-        <p className="mt-3 text-xs text-[var(--color-text-secondary)]">Per-client webhook URLs are shown in the Clients section.</p>
+        <p className="mt-3 text-xs text-[var(--color-text-secondary)]">
+          Each client has its own webhook secret, shown in the Clients section. Use that rather than the global secret: only alerts
+          that resolve to a client are persisted, scoped and enriched with that client&apos;s history.
+        </p>
       </Card>
 
       <Card className="xl:col-span-2">
@@ -84,17 +93,31 @@ export function IntegrationsSection({ summary }: Readonly<{ summary: SettingsSum
 
 export function AccessSection() {
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid gap-4">
       <Card>
-        <CardHeader eyebrow="Access" title="Sign-in and roles" actions={<Badge tone="neutral">Planned · #47</Badge>} />
-        <Notice>
-          Entra ID single sign-on (MSAL or App Service Easy Auth) with roles mapped from Entra group claims: <strong>Reader</strong> (view), <strong>Operator</strong> (acknowledge, comment, re-run, simulate), <strong>Admin</strong> (settings, integrations, clients). SCIM provisioning deferred until alert assignment needs users who have not signed in.
+        <CardHeader
+          eyebrow="Access"
+          title="Sign-in, roles and audit"
+          description="Nothing here is built yet. Recorded so the shape is agreed before it is."
+          actions={<Badge tone="neutral">Planned · #46, #47</Badge>}
+        />
+        <Notice tone="warning">
+          Every route is currently open and the admin APIs are unauthenticated. Do not expose this instance publicly.
         </Notice>
-        <p className="mt-3 text-xs text-[var(--color-text-secondary)]">Until this ships, all routes are open on the local network and the admin APIs are unauthenticated. Do not expose the app publicly.</p>
-      </Card>
-      <Card>
-        <CardHeader eyebrow="Audit" title="Audit log" actions={<Badge tone="neutral">Planned · #46</Badge>} />
-        <Notice>Who changed settings, acknowledged or commented, and which deliveries were sent. Required for MSP change evidence.</Notice>
+        <ul className="mt-3 space-y-1.5 text-xs text-[var(--color-text-secondary)]">
+          <li>
+            <strong className="text-[var(--color-text)]">Sign-in:</strong> Entra ID, through App Service Easy Auth or MSAL.
+          </li>
+          <li>
+            <strong className="text-[var(--color-text)]">Roles from Entra group claims:</strong> Reader views, Operator
+            acknowledges, comments, re-runs and simulates, Admin changes settings and clients.
+          </li>
+          <li>
+            <strong className="text-[var(--color-text)]">Audit:</strong> who changed settings, who acknowledged or commented, and
+            which deliveries were sent. Needed as MSP change evidence.
+          </li>
+          <li>SCIM provisioning stays deferred until alert assignment needs users who have never signed in.</li>
+        </ul>
       </Card>
     </div>
   );
@@ -104,9 +127,16 @@ export function SystemSection({ summary }: Readonly<{ summary: SettingsSummary }
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <Card>
-        <CardHeader eyebrow="Storage" title="Persistence" description="Pulse stores alerts, comments and diagnoses; metrics and logs stay in Azure and are fetched on demand." />
-        <Row label="Mode" value={summary.persistence.mode === 'prisma' ? 'Azure SQL via Prisma' : 'in-memory (capped at 500 alerts, lost on restart)'} ok={summary.persistence.databaseConfigured} />
-        <Notice className="mt-3">Retention policy (around 180 days then roll-up) and the persisted enrichment snapshot are tracked as #44.</Notice>
+        <CardHeader
+          eyebrow="Storage"
+          title="Persistence"
+          description="Alerts, comments, diagnoses and resource metadata. Metric values and log rows are never stored: they stay in Azure Monitor and Log Analytics and are queried when an alert needs diagnosing."
+        />
+        <Row label="Mode" value={summary.persistence.mode === 'prisma' ? 'SQL Server via Prisma' : 'in-memory (capped at 500 alerts, lost on restart)'} ok={summary.persistence.databaseConfigured} />
+        <Notice className="mt-3">
+          Only alerts that resolve to a client account are persisted; unscoped alerts stay in memory. Retention (around 180 days,
+          then roll-up) is #44.
+        </Notice>
       </Card>
       <Card>
         <CardHeader eyebrow="About" title="Pulse" />

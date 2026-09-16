@@ -104,7 +104,7 @@ export function ClientsSection({ selectedClientSlug, onSelectClientSlug, publicB
         <CardHeader
           eyebrow="Clients"
           title="Client accounts"
-          description="Each client gets its own webhook URL so alerts land in the right scope. Azure access is delegated via Lighthouse; see the Integrations section."
+          description="A client is the unit Pulse scopes everything to: alerts, comments, resources and dashboards. It cannot be replaced by the Azure tenant id, because Synextra reaches several clients through one tenant and one client through several."
           actions={
             <Button size="sm" variant={selectedClientSlug ? 'secondary' : 'primary'} onClick={() => onSelectClientSlug(null)}>
               All clients
@@ -118,7 +118,10 @@ export function ClientsSection({ selectedClientSlug, onSelectClientSlug, publicB
         )}
         {isLoading && clients.length === 0 && <p className="text-xs text-[var(--color-text-secondary)]">Loading…</p>}
         {!isLoading && clients.length === 0 && (
-          <EmptyState>No client accounts yet. Until a database is configured, alerts are unscoped and use the global webhook secret from the environment.</EmptyState>
+          <EmptyState>
+            No clients yet. Onboard one from Settings → Onboard a client, or add it by hand. Until a client exists, alerts are
+            unscoped: they arrive and broadcast, but are not persisted.
+          </EmptyState>
         )}
         <div className="grid gap-3">
           {clients.map((client) => (
@@ -128,7 +131,11 @@ export function ClientsSection({ selectedClientSlug, onSelectClientSlug, publicB
       </Card>
 
       <Card>
-        <CardHeader eyebrow="New client" title="Add a client" description="Creates the client record and its webhook secret. Requires DATABASE_URL." />
+        <CardHeader
+          eyebrow="New client"
+          title="Add a client by hand"
+          description="Onboarding creates clients from the subscriptions Pulse can see, which is the normal route. Use this when a client needs to exist before its subscriptions are delegated. Requires DATABASE_URL."
+        />
         <div className="grid gap-3">
           <Field label="Name">
             <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value, slug: form.slug || slugify(event.target.value) })} placeholder="Contoso Ltd" />

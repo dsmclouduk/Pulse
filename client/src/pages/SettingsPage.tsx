@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { ClientsSection } from '@/components/settings/ClientsSection';
 import { AccessSection, AgentSection, IntegrationsSection, SystemSection } from '@/components/settings/SettingsSections';
+import { OnboardingPage } from '@/pages/OnboardingPage';
 import { Notice, Spinner } from '@/components/ui';
 import type { SettingsSummary } from '@/types';
 
@@ -11,10 +12,11 @@ interface SettingsPageProps {
   onSelectClientSlug: (slug: string | null) => void;
 }
 
-type Section = 'clients' | 'agent' | 'integrations' | 'access' | 'system';
+type Section = 'clients' | 'onboarding' | 'agent' | 'integrations' | 'access' | 'system';
 
 const SECTIONS: Array<{ id: Section; label: string; description: string }> = [
-  { id: 'clients', label: 'Clients', description: 'Client accounts and webhook URLs' },
+  { id: 'clients', label: 'Clients', description: 'Who Pulse monitors, and their webhook URLs' },
+  { id: 'onboarding', label: 'Onboard a client', description: 'Discover subscriptions, plan and deploy monitoring' },
   { id: 'agent', label: 'Agent', description: 'Diagnosis provider and enrichment' },
   { id: 'integrations', label: 'Integrations', description: 'Azure access, ingest, delivery' },
   { id: 'access', label: 'Access', description: 'Sign-in, roles, audit' },
@@ -88,6 +90,11 @@ export function SettingsPage({ selectedClientSlug, onSelectClientSlug }: Readonl
         </ul>
       </nav>
 
+      {section === 'onboarding' ? (
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <OnboardingPage />
+        </div>
+      ) : (
       <div className="min-w-0 flex-1 overflow-auto p-6">
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-[var(--color-text)]">{active.label}</h2>
@@ -112,6 +119,7 @@ export function SettingsPage({ selectedClientSlug, onSelectClientSlug }: Readonl
         {section === 'access' && <AccessSection />}
         {section === 'system' && summary && <SystemSection summary={summary} />}
       </div>
+      )}
     </div>
   );
 }

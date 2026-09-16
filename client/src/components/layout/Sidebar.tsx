@@ -55,16 +55,6 @@ function DashboardsIcon() {
   );
 }
 
-function OnboardingIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 2v8" />
-      <path d="M5.5 5.5 9 2l3.5 3.5" />
-      <path d="M3 11v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3" />
-    </svg>
-  );
-}
-
 function ResourceTreeIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
@@ -200,7 +190,6 @@ export function Sidebar({ alerts, onSeverityClick, activeLevels }: Readonly<Side
         {/* Future pages */}
         <NavItem to="/dashboard" icon={<DashboardsIcon />} label="Dashboard" />
         <NavItem to="/resources" icon={<ResourceTreeIcon />} label="Resources" />
-        <NavItem to="/onboarding" icon={<OnboardingIcon />} label="Onboard" />
 
         {/* Divider */}
         <div className="mx-3 my-1 h-px bg-white/10" />
