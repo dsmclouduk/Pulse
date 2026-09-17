@@ -1,32 +1,44 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
     "mspOfferName": {
-      "value": "Synextra Managed Services"
+      "comment": "Must match the existing delegation exactly. The registration definition id is guid(mspOfferName), so reusing this name updates the delegation in place; a different name creates a second one alongside it.",
+      "value": "Synextra-Lighthouse"
     },
     "mspOfferDescription": {
-      "value": "Read-only monitoring by Synextra. No write access is granted; changes are made through BeyondTrust."
+      "value": "Synextra - Onboard to Azure LH for management."
     },
     "managedByTenantId": {
       "value": "f9e01f30-5fd9-4e42-993c-d7f969077e7f"
     },
     "authorizations": {
+      "comment": "Existing engineer access is unchanged. The monitoring group is additive and read-only: it deliberately does NOT get the registration-delete role, so Pulse can never remove a delegation.",
       "value": [
         {
-          "principalId": "650b3883-3936-4045-88db-32bc44a43a46",
-          "principalIdDisplayName": "Synextra - Monitoring Reader",
-          "roleDefinitionId": "acdd72a7-3385-48ef-bd42-f606fba81ae7"
+          "principalId": "89e5ce35-e62d-40f6-877b-c249b53b2c28",
+          "roleDefinitionId": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+          "principalIdDisplayName": "Lighthouse Reader"
+        },
+        {
+          "principalId": "89e5ce35-e62d-40f6-877b-c249b53b2c28",
+          "roleDefinitionId": "91c1777a-f3dc-4fae-b103-61d183457e46",
+          "principalIdDisplayName": "Lighthouse Removal"
         },
         {
           "principalId": "650b3883-3936-4045-88db-32bc44a43a46",
-          "principalIdDisplayName": "Synextra - Monitoring Reader",
-          "roleDefinitionId": "43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+          "roleDefinitionId": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+          "principalIdDisplayName": "Synextra - Monitoring Reader"
         },
         {
           "principalId": "650b3883-3936-4045-88db-32bc44a43a46",
-          "principalIdDisplayName": "Synextra - Monitoring Reader",
-          "roleDefinitionId": "73c42c96-874c-492b-b04d-ab87d138a893"
+          "roleDefinitionId": "43d0d8ad-25c7-4714-9337-8ba259a9fe05",
+          "principalIdDisplayName": "Synextra - Monitoring Reader"
+        },
+        {
+          "principalId": "650b3883-3936-4045-88db-32bc44a43a46",
+          "roleDefinitionId": "73c42c96-874c-492b-b04d-ab87d138a893",
+          "principalIdDisplayName": "Synextra - Monitoring Reader"
         }
       ]
     }

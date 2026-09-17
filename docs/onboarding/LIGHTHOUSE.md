@@ -13,12 +13,18 @@ Authorising a group means adding a principal to that group in Synextra's own ten
 every delegated client at once, with no customer involvement. Authorising individual principals means a
 template redeploy at every client whenever the principal changes.
 
-| | |
-|---|---|
-| Group | `Synextra - Monitoring Reader` |
-| Object ID | `650b3883-3936-4045-88db-32bc44a43a46` |
-| Roles granted | Reader, Monitoring Reader, Log Analytics Reader |
-| Members | `pulse-dev` service principal (add future monitoring identities here) |
+### Two groups, deliberately
+
+| Group | Object ID | Roles | Who is in it |
+|---|---|---|---|
+| `Lighthouse Management Group` | `89e5ce35-e62d-40f6-877b-c249b53b2c28` | Reader, **Managed Services Registration assignment Delete** | Synextra engineers |
+| `Synextra - Monitoring Reader` | `650b3883-3936-4045-88db-32bc44a43a46` | Reader, Monitoring Reader, Log Analytics Reader | `pulse-dev`, and future monitoring identities |
+
+Pulse is **not** put in the engineers' group. That group can delete registration assignments, meaning
+anything in it can remove Synextra's own access to a client tenant. A monitoring service should never hold
+that, so the monitoring group is a separate, additive authorisation with no delete role.
+
+The live offer name is **`Synextra-Lighthouse`**. Reuse it exactly.
 
 Lighthouse does not follow nested groups. Members must be direct.
 
