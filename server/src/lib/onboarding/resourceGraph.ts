@@ -49,11 +49,30 @@ interface ResourceGraphRow {
 }
 
 /**
+ * Artefacts and child records rather than things that run: stored templates, gallery images, agent
+ * extensions, DNS links. None emits a metric or can be alerted on, and on a real estate they were 90
+ * of 473 resources, drowning the ones that matter. Extend the list as more turn up.
+ *
+ * Deliberately not excluded: `microsoft.sql/servers/databases` is a child type but very much
+ * monitorable, so a blanket "exclude anything with two slashes" rule would be wrong.
+ */
+export const NON_MONITORABLE_TYPES = [
+  'microsoft.resources/templatespecs',
+  'microsoft.resources/templatespecs/versions',
+  'microsoft.compute/virtualmachines/extensions',
+  'microsoft.compute/galleries/images',
+  'microsoft.compute/galleries/images/versions',
+  'microsoft.network/privatednszones/virtualnetworklinks',
+  'microsoft.dependencymap/maps/discoverysources'
+];
+
+/**
  * Projecting `identity.type` lets one query answer "which VMs cannot take the agent" without a
  * second pass. Resource Graph returns null rather than failing when a type has no identity.
  */
 export const INVENTORY_QUERY = [
   'Resources',
+  `| where type !in~ (${NON_MONITORABLE_TYPES.map((type) => `'${type}'`).join(', ')})`,
   '| project id, name, type, resourceGroup, subscriptionId, location, kind, tags, identityType = tostring(identity.type)',
   '| order by id asc'
 ].join('\n');

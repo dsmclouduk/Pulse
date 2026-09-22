@@ -493,6 +493,8 @@ export interface DiscoveredTenant {
   clientName?: string;
   suggestedClientName?: string;
   subscriptionCount: number;
+  /** Where the shared workspace, DCRs and action group should live. A guess, always overridable. */
+  suggestedMonitoringSubscriptionId?: string;
   subscriptions: DiscoveredSubscription[];
 }
 

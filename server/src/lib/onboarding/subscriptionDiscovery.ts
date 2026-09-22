@@ -89,6 +89,28 @@ export async function listDiscoveredSubscriptions(): Promise<DiscoveredSubscript
 }
 
 /**
+ * Shared monitoring resources (the workspace, the DCRs, the action group) live in one subscription
+ * per client and are referenced from the others by resource id. A management or platform landing
+ * zone is the natural home, so prefer one by name and fall back to the first subscription.
+ *
+ * A guess, always shown and always overridable: getting it wrong scatters monitoring infrastructure
+ * across a client's estate, which is tidy-up nobody enjoys.
+ */
+export function suggestMonitoringHome(subscriptions: readonly DiscoveredSubscription[]): string | undefined {
+  const byPreference = [/management/i, /platform/i, /core/i, /identity/i];
+
+  for (const pattern of byPreference) {
+    const match = subscriptions.find((subscription) => pattern.test(subscription.displayName));
+
+    if (match) {
+      return match.subscriptionId;
+    }
+  }
+
+  return subscriptions[0]?.subscriptionId;
+}
+
+/**
  * Tenants, not subscriptions, are the unit of onboarding.
  *
  * Delegation is the decision: if a tenant's subscriptions reach Pulse through Lighthouse, that
@@ -130,6 +152,7 @@ export async function listDiscoveredTenants(): Promise<DiscoveredTenant[]> {
         clientName: client?.name ?? fromSubscription,
         suggestedClientName: client || fromSubscription ? undefined : suggested,
         subscriptionCount: tenantSubscriptions.length,
+        suggestedMonitoringSubscriptionId: suggestMonitoringHome(tenantSubscriptions),
         subscriptions: tenantSubscriptions
       };
     })
