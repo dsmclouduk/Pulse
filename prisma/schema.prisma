@@ -115,12 +115,22 @@ model Resource {
   clientAccountId     String
   azureSubscriptionId String?
   siteId              String?
+  /// Lower-cased ARM path. Azure sends lower-cased ids in alert payloads and canonical casing from
+  /// Resource Graph, so the key must be normalised or the same resource is stored twice.
   resourceId          String                  @unique
+  /// Canonical casing as Azure last reported it, for display and for ARM calls.
+  resourceIdDisplay   String?
   providerType        String
   displayName         String
   resourceGroup       String?
   region              String?
+  kind                String?
   tagsJson            String?
+  /// How Pulse learned about it: `alert` (it alerted) or `inventory` (Resource Graph).
+  discoverySource     String                  @default("alert")
+  /// Null when unknown. False on a VM means the Azure Monitor Agent cannot be installed.
+  hasManagedIdentity  Boolean?
+  lastSeenAt          DateTime?
   status              String                  @default("DISCOVERED")
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt

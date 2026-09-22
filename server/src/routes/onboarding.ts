@@ -11,6 +11,9 @@ import {
   type BaselineTier
 } from '../lib/onboarding/baseline.js';
 import { generateBaselineDeployment, type BaselinePlanInput } from '../lib/onboarding/bicepGenerator.js';
+import { lastInventoryRun, listInventory, saveInventory } from '../lib/onboarding/inventoryRepository.js';
+import { queryInventory, regionsInUse, summariseInventory, type DiscoveredResource } from '../lib/onboarding/resourceGraph.js';
+import { prisma } from '../lib/prisma.js';
 import { listDiscoveredSubscriptions } from '../lib/onboarding/subscriptionDiscovery.js';
 
 /**
@@ -48,6 +51,97 @@ onboardingRouter.get('/baseline', (request, response) => {
     ruleCount: rules.length,
     rules
   });
+});
+
+async function resolveClient(clientSlug: string | undefined) {
+  if (!clientSlug || !process.env.DATABASE_URL) {
+    return null;
+  }
+
+  return prisma.clientAccount.findUnique({
+    where: { slug: clientSlug },
+    select: { id: true, name: true, slug: true, azureSubscriptions: { select: { externalSubscriptionId: true } } }
+  });
+}
+
+function toDiscovered(rows: Awaited<ReturnType<typeof listInventory>>): DiscoveredResource[] {
+  return rows.map((row) => ({
+    resourceId: row.resourceId.toLowerCase(),
+    resourceIdDisplay: row.resourceId,
+    name: row.name,
+    resourceType: row.resourceType,
+    resourceGroup: row.resourceGroup,
+    subscriptionId: '',
+    location: row.region,
+    kind: null,
+    tags: row.tags,
+    hasManagedIdentity: row.hasManagedIdentity
+  }));
+}
+
+/** What Pulse currently holds for a client. Reads the stored inventory; never calls Azure. */
+onboardingRouter.get('/inventory', async (request, response) => {
+  const clientSlug = typeof request.query.clientSlug === 'string' ? request.query.clientSlug : undefined;
+  const client = await resolveClient(clientSlug);
+
+  if (!client) {
+    response.status(404).json({ error: `No client account for slug "${clientSlug ?? ''}".` });
+    return;
+  }
+
+  const resources = await listInventory(client.id);
+  const discovered = toDiscovered(resources);
+
+  response.json({
+    clientSlug: client.slug,
+    clientName: client.name,
+    lastRunAt: await lastInventoryRun(client.id),
+    subscriptionCount: client.azureSubscriptions.length,
+    resourceCount: resources.length,
+    regions: regionsInUse(discovered),
+    byType: summariseInventory(discovered),
+    resources
+  });
+});
+
+/** Refreshes the inventory from Resource Graph. Read-only against Azure; writes only metadata. */
+onboardingRouter.post('/inventory/refresh', async (request, response) => {
+  const body = request.body as { clientSlug?: string } | undefined;
+  const client = await resolveClient(body?.clientSlug);
+
+  if (!client) {
+    response.status(404).json({ error: `No client account for slug "${body?.clientSlug ?? ''}".` });
+    return;
+  }
+
+  const subscriptionIds = client.azureSubscriptions.map((subscription) => subscription.externalSubscriptionId);
+
+  if (subscriptionIds.length === 0) {
+    response.status(400).json({
+      error: `${client.name} has no subscriptions assigned yet. Assign one on the Access step first.`
+    });
+    return;
+  }
+
+  try {
+    const { resources, truncated } = await queryInventory(subscriptionIds);
+    const written = await saveInventory(client.id, subscriptionIds, resources);
+
+    console.log(
+      `[${new Date().toISOString()}] [onboarding] inventory ${client.slug}: ${resources.length} resource(s) across ${subscriptionIds.length} subscription(s), ${written.created} new, ${written.stale} stale`
+    );
+
+    response.json({
+      clientSlug: client.slug,
+      resourceCount: resources.length,
+      regions: regionsInUse(resources),
+      byType: summariseInventory(resources),
+      written,
+      truncated
+    });
+  } catch (error) {
+    response.status(502).json({ error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 /**

@@ -487,6 +487,26 @@ export interface SubscriptionDiscoveryResult {
   message?: string;
 }
 
+export interface InventoryTypeRow {
+  resourceType: string;
+  count: number;
+  regions: string[];
+  /** Only meaningful where the monitoring agent runs; elsewhere always 0. */
+  withoutManagedIdentity: number;
+  agentCapable: boolean;
+}
+
+/** Metadata inventory for a client. Metric values are never stored, only what a resource is. */
+export interface InventorySummary {
+  clientSlug: string;
+  clientName: string;
+  lastRunAt: string | null;
+  subscriptionCount: number;
+  resourceCount: number;
+  regions: string[];
+  byType: InventoryTypeRow[];
+}
+
 export interface ClientSubscriptionSummary {
   externalSubscriptionId: string;
   displayName: string;

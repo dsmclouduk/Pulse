@@ -15,7 +15,8 @@ interface AccessStepProps {
   error: string | null;
   onRefresh: () => void;
   selectedClient: string | null;
-  onSelectClient: (client: string | null) => void;
+  /** The slug is what the rest of the wizard needs; a suggested-but-unassigned client has none yet. */
+  onSelectClient: (client: { name: string; slug: string | null } | null) => void;
 }
 
 export function AccessStep({ discovery, loading, error, onRefresh, selectedClient, onSelectClient }: Readonly<AccessStepProps>) {
@@ -166,7 +167,13 @@ export function AccessStep({ discovery, loading, error, onRefresh, selectedClien
                       </td>
                       <td className="px-4 py-2 text-right">
                         {client && (
-                          <Button size="sm" variant={isSelected ? 'primary' : 'ghost'} onClick={() => onSelectClient(isSelected ? null : client)}>
+                          <Button
+                            size="sm"
+                            variant={isSelected ? 'primary' : 'ghost'}
+                            onClick={() =>
+                              onSelectClient(isSelected ? null : { name: client, slug: subscription.assignedClientSlug ?? null })
+                            }
+                          >
                             {isSelected ? 'Selected' : 'Onboard'}
                           </Button>
                         )}

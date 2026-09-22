@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { AccessStep } from '@/components/onboarding/AccessStep';
-import { CoverageStep, DeployStep, InventoryStep, PlanStep, VerifyStep } from '@/components/onboarding/steps';
+import { InventoryStep } from '@/components/onboarding/InventoryStep';
+import { CoverageStep, DeployStep, PlanStep, VerifyStep } from '@/components/onboarding/steps';
 import { Button } from '@/components/ui';
 import type { SubscriptionDiscoveryResult } from '@/types';
 
@@ -82,7 +83,7 @@ export function OnboardingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [selectedClient, setSelectedClient] = useState<{ name: string; slug: string | null } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -115,8 +116,8 @@ export function OnboardingPage() {
     return () => controller.abort();
   }, [reloadKey]);
 
-  // Only Access is wired to live Azure data; the rest render the intended design.
-  const reachable = useMemo(() => new Set<OnboardingStepId>(['access']), []);
+  // Access and Inventory are wired to live Azure; the rest render the intended design.
+  const reachable = useMemo(() => new Set<OnboardingStepId>(['access', 'inventory']), []);
 
   const index = STEPS.findIndex((entry) => entry.id === step);
   const previous = index > 0 ? STEPS[index - 1] : null;
@@ -133,21 +134,21 @@ export function OnboardingPage() {
             loading={loading}
             error={error}
             onRefresh={() => setReloadKey((value) => value + 1)}
-            selectedClient={selectedClient}
+            selectedClient={selectedClient?.name ?? null}
             onSelectClient={setSelectedClient}
           />
         )}
-        {step === 'inventory' && <InventoryStep clientName={selectedClient} />}
-        {step === 'coverage' && <CoverageStep clientName={selectedClient} />}
-        {step === 'plan' && <PlanStep clientName={selectedClient} />}
-        {step === 'deploy' && <DeployStep clientName={selectedClient} />}
-        {step === 'verify' && <VerifyStep clientName={selectedClient} />}
+        {step === 'inventory' && <InventoryStep clientSlug={selectedClient?.slug ?? null} clientName={selectedClient?.name ?? null} />}
+        {step === 'coverage' && <CoverageStep clientName={selectedClient?.name ?? null} />}
+        {step === 'plan' && <PlanStep clientName={selectedClient?.name ?? null} />}
+        {step === 'deploy' && <DeployStep clientName={selectedClient?.name ?? null} />}
+        {step === 'verify' && <VerifyStep clientName={selectedClient?.name ?? null} />}
       </div>
 
       <div className="flex items-center gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2">
         <span className="text-xs text-[var(--color-text-secondary)]">
           Step {index + 1} of {STEPS.length}
-          {selectedClient ? ` · ${selectedClient}` : ''}
+          {selectedClient ? ` · ${selectedClient.name}` : ''}
         </span>
         <div className="flex-1" />
         {previous && (

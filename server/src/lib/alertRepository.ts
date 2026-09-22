@@ -223,12 +223,17 @@ export async function persistAlert(
 
     let resource = null;
 
-    if (primaryResourceId) {
+    // Some alerts target the subscription rather than a resource (Service Health, for one). Those
+    // are not resources and must not become inventory rows.
+    if (primaryResourceId && primaryResourceId.toLowerCase().includes('/providers/')) {
       const resourcePathSegments = primaryResourceId.split('/').filter(Boolean);
+      // Azure lower-cases ARM paths in alert payloads but not in Resource Graph, so the key is
+      // normalised; without this the same resource is stored twice.
+      const resourceKey = primaryResourceId.toLowerCase();
 
       resource = await transaction.resource.findUnique({
         where: {
-          resourceId: primaryResourceId
+          resourceId: resourceKey
         }
       });
 
@@ -237,10 +242,12 @@ export async function persistAlert(
           data: {
             clientAccountId,
             azureSubscriptionId: subscription?.id,
-            resourceId: primaryResourceId,
-            providerType: extractProviderType(primaryResourceId),
+            resourceId: resourceKey,
+            resourceIdDisplay: primaryResourceId,
+            providerType: extractProviderType(primaryResourceId).toLowerCase(),
             displayName: resourcePathSegments.at(-1) ?? primaryResourceId,
             resourceGroup: alert.resourceGroup,
+            discoverySource: 'alert',
             status: 'DISCOVERED'
           }
         });

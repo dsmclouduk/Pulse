@@ -25,6 +25,8 @@ export type {
   CreateClientAccountRequest,
   CreateTenantConnectionRequest,
   DiscoveredSubscription,
+  InventorySummary,
+  InventoryTypeRow,
   SubscriptionDiscoveryResult,
   DiagnosisUrgency,
   EnrichmentState,
