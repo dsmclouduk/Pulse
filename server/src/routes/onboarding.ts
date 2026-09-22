@@ -15,7 +15,7 @@ import {
 import { generateBaselineDeployment, type BaselinePlanInput } from '../lib/onboarding/bicepGenerator.js';
 import { buildCoverageReport, queryCoverageFacts } from '../lib/onboarding/coverageReport.js';
 import { lastInventoryRun, listInventory, saveInventory } from '../lib/onboarding/inventoryRepository.js';
-import { queryInventory, regionsInUse, summariseInventory, type DiscoveredResource } from '../lib/onboarding/resourceGraph.js';
+import { isMonitorableType, queryInventory, regionsInUse, summariseInventory, type DiscoveredResource } from '../lib/onboarding/resourceGraph.js';
 import { prisma } from '../lib/prisma.js';
 import { listDiscoveredSubscriptions, listDiscoveredTenants, slugify } from '../lib/onboarding/subscriptionDiscovery.js';
 
@@ -103,6 +103,7 @@ onboardingRouter.get('/inventory', async (request, response) => {
     resourceCount: resources.length,
     regions: regionsInUse(discovered),
     byType: summariseInventory(discovered),
+    monitorableCount: discovered.filter((resource) => isMonitorableType(resource.resourceType)).length,
     resources
   });
 });
@@ -139,6 +140,7 @@ onboardingRouter.post('/inventory/refresh', async (request, response) => {
       resourceCount: resources.length,
       regions: regionsInUse(resources),
       byType: summariseInventory(resources),
+      monitorableCount: resources.filter((resource) => isMonitorableType(resource.resourceType)).length,
       written,
       truncated
     });

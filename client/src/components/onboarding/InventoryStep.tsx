@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Badge, Button, Card, CardHeader, Notice, Spinner, StatTile } from '@/components/ui';
 import type { InventorySummary } from '@/types';
@@ -22,6 +22,8 @@ export function InventoryStep({ clientSlug, clientName }: Readonly<InventoryStep
   const [summary, setSummary] = useState<InventorySummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Types the baseline covers lead the view; the rest are discovered but are not what onboarding is about.
+  const [showAll, setShowAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -80,11 +82,20 @@ export function InventoryStep({ clientSlug, clientName }: Readonly<InventoryStep
     }
   }
 
+  // Hooks must run before any early return, so this sits above the no-client case.
+  const rows = useMemo(() => {
+    const all = summary?.byType ?? [];
+    return showAll ? all : all.filter((row) => row.monitorable);
+  }, [summary, showAll]);
+
   if (!clientSlug) {
     return <Notice tone="warning">Pick a client on the Access step to take an inventory.</Notice>;
   }
 
   const blockers = (summary?.byType ?? []).filter((row) => row.withoutManagedIdentity > 0);
+  const otherCount = (summary?.byType ?? [])
+    .filter((row) => !row.monitorable)
+    .reduce((total, row) => total + row.count, 0);
 
   return (
     <div className="flex flex-col gap-3">
@@ -107,7 +118,11 @@ export function InventoryStep({ clientSlug, clientName }: Readonly<InventoryStep
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Resources" value={summary?.resourceCount ?? 0} />
+            <StatTile
+              label="Monitorable"
+              value={summary?.monitorableCount ?? 0}
+              hint={`of ${summary?.resourceCount ?? 0} discovered`}
+            />
             <StatTile label="Subscriptions" value={summary?.subscriptionCount ?? 0} />
             <StatTile label="Regions in use" value={summary?.regions.length ?? 0} hint={summary?.regions.join(', ')} />
             <StatTile
@@ -146,8 +161,15 @@ export function InventoryStep({ clientSlug, clientName }: Readonly<InventoryStep
       {summary && summary.byType.length > 0 && (
         <Card>
           <CardHeader
-            title="By resource type"
+            title={showAll ? 'All resource types' : 'Types the baseline covers'}
             description="Which types exist decides which sections of the baseline are generated. A client with no App Services gets no App Service rules."
+            actions={
+              otherCount > 0 ? (
+                <Button size="sm" variant="ghost" onClick={() => setShowAll((value) => !value)}>
+                  {showAll ? 'Show covered only' : `Show all (${otherCount} not covered)`}
+                </Button>
+              ) : undefined
+            }
           />
           <div className="-mx-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -160,7 +182,7 @@ export function InventoryStep({ clientSlug, clientName }: Readonly<InventoryStep
                 </tr>
               </thead>
               <tbody>
-                {summary.byType.map((row) => (
+                {rows.map((row) => (
                   <tr key={row.resourceType} className="border-b border-[var(--color-border)] last:border-0">
                     <td className="px-4 py-2 text-[var(--color-text)]" title={row.resourceType}>
                       {shortType(row.resourceType)}

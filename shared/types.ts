@@ -519,6 +519,8 @@ export interface InventoryTypeRow {
   /** Only meaningful where the monitoring agent runs; elsewhere always 0. */
   withoutManagedIdentity: number;
   agentCapable: boolean;
+  /** True when the baseline catalogue has rules for this type. */
+  monitorable: boolean;
 }
 
 /** Metadata inventory for a client. Metric values are never stored, only what a resource is. */
@@ -530,6 +532,8 @@ export interface InventorySummary {
   resourceCount: number;
   regions: string[];
   byType: InventoryTypeRow[];
+  /** Resources of types the baseline covers. The headline number for onboarding. */
+  monitorableCount: number;
 }
 
 export type CoverageState = 'MONITORED' | 'PARTIAL' | 'UNMONITORED' | 'BLOCKED_NO_IDENTITY' | 'UNKNOWN';

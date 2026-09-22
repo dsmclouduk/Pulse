@@ -106,7 +106,9 @@ export async function listInventory(clientAccountId: string): Promise<StoredReso
   }
 
   const rows = await prisma.resource.findMany({
-    where: { clientAccountId },
+    // Stale rows are kept so alert history still resolves, but they are not part of the estate any
+    // more and counting them inflates every number on the onboarding screens.
+    where: { clientAccountId, status: { not: 'STALE' } },
     orderBy: [{ providerType: 'asc' }, { displayName: 'asc' }]
   });
 

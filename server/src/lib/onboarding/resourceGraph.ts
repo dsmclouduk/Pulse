@@ -1,4 +1,5 @@
 import { AZURE_MANAGEMENT_RESOURCE, getAzureToken, isAzureMetricsConfigured } from '../azureAuth.js';
+import { resourceTypesCovered } from './baseline.js';
 
 /**
  * Metadata inventory from Azure Resource Graph.
@@ -176,6 +177,15 @@ export function agentCanRunOn(resourceType: string): boolean {
   return AGENT_CAPABLE_TYPES.has(resourceType.toLowerCase());
 }
 
+/**
+ * A type is monitorable when the baseline catalogue has rules for it. Everything else is still
+ * discovered and stored, because "you have five Application Gateways we do not cover" is worth
+ * knowing, but it is not what the onboarding plan is about and should not lead the view.
+ */
+export function isMonitorableType(resourceType: string): boolean {
+  return resourceTypesCovered().includes(resourceType.toLowerCase());
+}
+
 export interface InventorySummaryRow {
   resourceType: string;
   count: number;
@@ -184,6 +194,8 @@ export interface InventorySummaryRow {
   withoutManagedIdentity: number;
   /** True when this type can take the agent, so the count above means something. */
   agentCapable: boolean;
+  /** True when the baseline catalogue has rules for this type. */
+  monitorable: boolean;
 }
 
 /** Pure: folds resources into the per-type view the onboarding wizard shows. */
@@ -212,7 +224,8 @@ export function summariseInventory(resources: readonly DiscoveredResource[]): In
       count: entry.count,
       regions: [...entry.regions].sort((left, right) => left.localeCompare(right)),
       withoutManagedIdentity: entry.withoutIdentity,
-      agentCapable: agentCanRunOn(resourceType)
+      agentCapable: agentCanRunOn(resourceType),
+      monitorable: isMonitorableType(resourceType)
     }))
     .sort((left, right) => right.count - left.count || left.resourceType.localeCompare(right.resourceType));
 }
