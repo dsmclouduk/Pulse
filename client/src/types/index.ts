@@ -28,6 +28,8 @@ export type {
   CoverageReport,
   CoverageState,
   DiscoveredSubscription,
+  DiscoveredTenant,
+  TenantDiscoveryResult,
   InventorySummary,
   InventoryTypeRow,
   SubscriptionDiscoveryResult,

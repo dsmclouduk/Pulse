@@ -1,6 +1,8 @@
+import { randomBytes } from 'node:crypto';
+
 import { Router } from 'express';
 
-import type { SubscriptionDiscoveryResult } from '../../../shared/types.js';
+import type { SubscriptionDiscoveryResult, TenantDiscoveryResult } from '../../../shared/types.js';
 import { isAzureMetricsConfigured } from '../lib/azureAuth.js';
 import {
   allRules,
@@ -15,7 +17,7 @@ import { buildCoverageReport, queryCoverageFacts } from '../lib/onboarding/cover
 import { lastInventoryRun, listInventory, saveInventory } from '../lib/onboarding/inventoryRepository.js';
 import { queryInventory, regionsInUse, summariseInventory, type DiscoveredResource } from '../lib/onboarding/resourceGraph.js';
 import { prisma } from '../lib/prisma.js';
-import { listDiscoveredSubscriptions } from '../lib/onboarding/subscriptionDiscovery.js';
+import { listDiscoveredSubscriptions, listDiscoveredTenants, slugify } from '../lib/onboarding/subscriptionDiscovery.js';
 
 /**
  * Onboarding is read-only. Pulse discovers what its identity can reach and generates the deployment
@@ -242,6 +244,113 @@ onboardingRouter.post('/plan', (request, response) => {
     deployCommand: deployment.deployCommand,
     warnings: deployment.warnings
   });
+});
+
+/**
+ * Tenants Pulse can reach. This is the top of onboarding: Lighthouse delegation is the decision, so
+ * a delegated tenant is onboarded and all of its subscriptions are in scope.
+ */
+onboardingRouter.get('/tenants', async (_request, response) => {
+  if (!isAzureMetricsConfigured()) {
+    const result: TenantDiscoveryResult = {
+      credentialsConfigured: false,
+      tenants: [],
+      message: 'Azure credentials are not configured, so Pulse cannot see any tenants yet.'
+    };
+
+    response.json(result);
+    return;
+  }
+
+  try {
+    const tenants = await listDiscoveredTenants();
+    const delegated = tenants.filter((tenant) => !tenant.isHomeTenant).length;
+
+    const result: TenantDiscoveryResult = {
+      credentialsConfigured: true,
+      homeTenantId: process.env.AZURE_TENANT_ID,
+      tenants,
+      message:
+        delegated === 0
+          ? 'Only the Synextra tenant is visible. A client tenant appears here once Pulse is authorised in its Lighthouse delegation (docs/onboarding/LIGHTHOUSE.md).'
+          : undefined
+    };
+
+    console.log(`[${new Date().toISOString()}] [onboarding] discovered ${tenants.length} tenant(s), ${delegated} delegated`);
+    response.json(result);
+  } catch (error) {
+    response.status(502).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+/**
+ * Names a tenant and brings it under management: creates or updates the client account and records
+ * every subscription in the tenant. Delegation already decided the scope, so nothing is opt-in here.
+ */
+onboardingRouter.post('/tenants/adopt', async (request, response) => {
+  const body = request.body as { tenantId?: string; clientName?: string } | undefined;
+
+  if (!body?.tenantId || !body.clientName?.trim()) {
+    response.status(400).json({ error: 'tenantId and clientName are required.' });
+    return;
+  }
+
+  if (!process.env.DATABASE_URL) {
+    response.status(400).json({ error: 'A database is required to onboard a tenant. Set DATABASE_URL.' });
+    return;
+  }
+
+  const clientName = body.clientName.trim();
+  const tenants = await listDiscoveredTenants();
+  const tenant = tenants.find((entry) => entry.tenantId === body.tenantId);
+
+  if (!tenant) {
+    response.status(404).json({ error: 'Pulse cannot reach that tenant, so it cannot be onboarded.' });
+    return;
+  }
+
+  const slug = tenant.clientSlug ?? slugify(clientName);
+
+  const client = await prisma.clientAccount.upsert({
+    where: { slug },
+    create: {
+      slug,
+      name: clientName,
+      primaryTenantId: tenant.tenantId,
+      onboardingStatus: 'ONBOARDED',
+      webhookSecret: randomBytes(24).toString('hex')
+    },
+    update: { name: clientName, primaryTenantId: tenant.tenantId, onboardingStatus: 'ONBOARDED' },
+    select: { id: true, slug: true, name: true }
+  });
+
+  // Every subscription in the tenant, because delegation already decided the scope.
+  for (const subscription of tenant.subscriptions) {
+    await prisma.azureSubscription.upsert({
+      where: { externalSubscriptionId: subscription.subscriptionId },
+      create: {
+        clientAccountId: client.id,
+        externalSubscriptionId: subscription.subscriptionId,
+        displayName: subscription.displayName,
+        tenantId: subscription.tenantId,
+        status: 'ACTIVE',
+        onboardingStatus: 'ONBOARDED'
+      },
+      update: {
+        clientAccountId: client.id,
+        displayName: subscription.displayName,
+        tenantId: subscription.tenantId,
+        status: 'ACTIVE',
+        onboardingStatus: 'ONBOARDED'
+      }
+    });
+  }
+
+  console.log(
+    `[${new Date().toISOString()}] [onboarding] adopted tenant ${tenant.tenantId} as ${client.slug} with ${tenant.subscriptions.length} subscription(s)`
+  );
+
+  response.json({ clientSlug: client.slug, clientName: client.name, subscriptionCount: tenant.subscriptions.length });
 });
 
 onboardingRouter.get('/subscriptions', async (_request, response) => {

@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { AccessStep } from '@/components/onboarding/AccessStep';
 import { CoverageStep } from '@/components/onboarding/CoverageStep';
 import { InventoryStep } from '@/components/onboarding/InventoryStep';
 import { DeployStep, PlanStep, VerifyStep } from '@/components/onboarding/steps';
 import { Button } from '@/components/ui';
-import type { SubscriptionDiscoveryResult } from '@/types';
 
 /**
  * Client onboarding, as a wizard whose steps mirror what actually has to happen in Azure.
@@ -22,7 +21,7 @@ interface StepDefinition {
 }
 
 const STEPS: StepDefinition[] = [
-  { id: 'access', title: 'Access', blurb: 'Which subscriptions Pulse can reach, and who they belong to' },
+  { id: 'access', title: 'Access', blurb: 'Which client tenants Pulse can reach through Lighthouse' },
   { id: 'inventory', title: 'Inventory', blurb: 'What is in the estate, and anything that blocks monitoring' },
   { id: 'coverage', title: 'Coverage', blurb: 'What monitoring exists today, read back from Azure' },
   { id: 'plan', title: 'Plan', blurb: 'Choose the tier, review thresholds, see the diff' },
@@ -80,44 +79,9 @@ function StepRail({
 
 export function OnboardingPage() {
   const [step, setStep] = useState<OnboardingStepId>('access');
-  const [discovery, setDiscovery] = useState<SubscriptionDiscoveryResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [selectedClient, setSelectedClient] = useState<{ name: string; slug: string | null } | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch('/api/onboarding/subscriptions', { signal: controller.signal });
-
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(payload?.error ?? `Request failed with ${response.status}`);
-        }
-
-        setDiscovery((await response.json()) as SubscriptionDiscoveryResult);
-      } catch (cause) {
-        if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : 'Could not list subscriptions.');
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void load();
-    return () => controller.abort();
-  }, [reloadKey]);
-
-  // Access and Inventory are wired to live Azure; the rest render the intended design.
+  /** The tenant being onboarded. Everything downstream is scoped to it. */
+  const [selectedClient, setSelectedClient] = useState<{ name: string; slug: string | null; tenantId: string } | null>(null);
+  // Access, Inventory and Coverage are wired to live Azure; the rest render the intended design.
   const reachable = useMemo(() => new Set<OnboardingStepId>(['access', 'inventory', 'coverage']), []);
 
   const index = STEPS.findIndex((entry) => entry.id === step);
@@ -130,14 +94,7 @@ export function OnboardingPage() {
 
       <div className="min-h-0 flex-1 overflow-auto p-4">
         {step === 'access' && (
-          <AccessStep
-            discovery={discovery}
-            loading={loading}
-            error={error}
-            onRefresh={() => setReloadKey((value) => value + 1)}
-            selectedClient={selectedClient?.name ?? null}
-            onSelectClient={setSelectedClient}
-          />
+          <AccessStep selectedTenantId={selectedClient?.tenantId ?? null} onSelectTenant={setSelectedClient} />
         )}
         {step === 'inventory' && <InventoryStep clientSlug={selectedClient?.slug ?? null} clientName={selectedClient?.name ?? null} />}
         {step === 'coverage' && <CoverageStep clientSlug={selectedClient?.slug ?? null} clientName={selectedClient?.name ?? null} />}

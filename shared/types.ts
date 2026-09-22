@@ -480,6 +480,29 @@ export interface DiscoveredSubscription {
   suggestedClientName?: string;
 }
 
+/**
+ * A tenant Pulse can reach. Onboarding happens at this level: Lighthouse delegation is the decision,
+ * so every subscription in a delegated tenant is in scope.
+ */
+export interface DiscoveredTenant {
+  tenantId: string;
+  /** Synextra's own tenant, which is infrastructure rather than a client. */
+  isHomeTenant: boolean;
+  clientSlug?: string;
+  /** Typed into Pulse: Lighthouse is ARM-only and never reports a customer tenant name. */
+  clientName?: string;
+  suggestedClientName?: string;
+  subscriptionCount: number;
+  subscriptions: DiscoveredSubscription[];
+}
+
+export interface TenantDiscoveryResult {
+  credentialsConfigured: boolean;
+  homeTenantId?: string;
+  tenants: DiscoveredTenant[];
+  message?: string;
+}
+
 export interface SubscriptionDiscoveryResult {
   credentialsConfigured: boolean;
   homeTenantId?: string;

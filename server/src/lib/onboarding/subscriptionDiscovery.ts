@@ -1,4 +1,4 @@
-import type { DiscoveredSubscription } from '../../../../shared/types.js';
+import type { DiscoveredSubscription, DiscoveredTenant } from '../../../../shared/types.js';
 import { AZURE_MANAGEMENT_RESOURCE, getAzureToken, isAzureMetricsConfigured } from '../azureAuth.js';
 import { prisma } from '../prisma.js';
 
@@ -86,4 +86,56 @@ export async function listDiscoveredSubscriptions(): Promise<DiscoveredSubscript
       suggestedClientName: existing ? undefined : suggestClientName(subscription.displayName)
     };
   });
+}
+
+/**
+ * Tenants, not subscriptions, are the unit of onboarding.
+ *
+ * Delegation is the decision: if a tenant's subscriptions reach Pulse through Lighthouse, that
+ * client is onboarded and every one of its subscriptions is in scope. Asking again per subscription
+ * would be asking a question already answered, and would let a subscription be silently left out.
+ *
+ * Lighthouse is ARM-only with no Graph into the customer tenant, so Azure never tells us a tenant's
+ * name. It is typed into Pulse once and stored on the client account.
+ */
+export async function listDiscoveredTenants(): Promise<DiscoveredTenant[]> {
+  const subscriptions = await listDiscoveredSubscriptions();
+  const homeTenantId = process.env.AZURE_TENANT_ID ?? '';
+
+  const clientsByTenant = isPersistenceConfigured()
+    ? await prisma.clientAccount.findMany({
+        where: { primaryTenantId: { not: null } },
+        select: { slug: true, name: true, primaryTenantId: true }
+      })
+    : [];
+
+  const clientForTenant = new Map(clientsByTenant.map((client) => [client.primaryTenantId ?? '', client]));
+  const byTenant = new Map<string, DiscoveredSubscription[]>();
+
+  for (const subscription of subscriptions) {
+    byTenant.set(subscription.tenantId, [...(byTenant.get(subscription.tenantId) ?? []), subscription]);
+  }
+
+  return [...byTenant.entries()]
+    .map(([tenantId, tenantSubscriptions]) => {
+      const client = clientForTenant.get(tenantId);
+      // Fall back to a name already recorded against one of its subscriptions, then to the prefix.
+      const fromSubscription = tenantSubscriptions.find((subscription) => subscription.assignedClientName)?.assignedClientName;
+      const suggested = tenantSubscriptions.map((subscription) => subscription.suggestedClientName).find(Boolean);
+
+      return {
+        tenantId,
+        isHomeTenant: tenantId === homeTenantId,
+        clientSlug: client?.slug,
+        clientName: client?.name ?? fromSubscription,
+        suggestedClientName: client || fromSubscription ? undefined : suggested,
+        subscriptionCount: tenantSubscriptions.length,
+        subscriptions: tenantSubscriptions
+      };
+    })
+    .sort((left, right) => {
+      // Synextra's own tenant last: it is infrastructure, not a client.
+      if (left.isHomeTenant !== right.isHomeTenant) return left.isHomeTenant ? 1 : -1;
+      return (left.clientName ?? left.tenantId).localeCompare(right.clientName ?? right.tenantId);
+    });
 }

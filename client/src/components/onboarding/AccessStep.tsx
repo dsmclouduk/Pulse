@@ -1,70 +1,179 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Badge, Button, Card, CardHeader, Input, Notice, Spinner, StatTile } from '@/components/ui';
-import type { SubscriptionDiscoveryResult } from '@/types';
+import type { DiscoveredTenant, TenantDiscoveryResult } from '@/types';
 
 /**
- * Step 1. The only step wired to live Azure: it lists what Pulse's own identity can actually reach.
- * A subscription in another tenant is visible only through a Lighthouse delegation that authorises
- * Pulse, so an empty list here is the real blocker, not a UI state to hide.
+ * Step 1, at tenant level.
+ *
+ * Lighthouse delegation is the decision: if a client's tenant reaches Pulse, that client is
+ * onboarded and every subscription in the tenant is in scope. Asking again per subscription would
+ * re-ask a settled question, and would let a subscription be quietly left unmonitored.
+ *
+ * Azure never tells us a customer tenant's name, because Lighthouse is ARM-only with no Graph into
+ * the customer directory. The name is typed here once.
  */
 
 interface AccessStepProps {
-  discovery: SubscriptionDiscoveryResult | null;
-  loading: boolean;
-  error: string | null;
-  onRefresh: () => void;
-  selectedClient: string | null;
-  /** The slug is what the rest of the wizard needs; a suggested-but-unassigned client has none yet. */
-  onSelectClient: (client: { name: string; slug: string | null } | null) => void;
+  selectedTenantId: string | null;
+  onSelectTenant: (client: { name: string; slug: string | null; tenantId: string } | null) => void;
 }
 
-export function AccessStep({ discovery, loading, error, onRefresh, selectedClient, onSelectClient }: Readonly<AccessStepProps>) {
-  const [search, setSearch] = useState('');
-  const [onlyUnassigned, setOnlyUnassigned] = useState(false);
+function TenantRow({
+  tenant,
+  selected,
+  onSelect,
+  onAdopted
+}: Readonly<{
+  tenant: DiscoveredTenant;
+  selected: boolean;
+  onSelect: () => void;
+  onAdopted: () => void;
+}>) {
+  const [name, setName] = useState(tenant.clientName ?? tenant.suggestedClientName ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
-  const subscriptions = discovery?.subscriptions ?? [];
+  const onboarded = Boolean(tenant.clientSlug);
 
-  const visible = useMemo(() => {
-    const term = search.trim().toLowerCase();
+  async function adopt(): Promise<void> {
+    setSaving(true);
+    setError(null);
 
-    return subscriptions.filter((subscription) => {
-      if (onlyUnassigned && subscription.assignedClientSlug) {
-        return false;
+    try {
+      const response = await fetch('/api/onboarding/tenants/adopt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: tenant.tenantId, clientName: name.trim() })
+      });
+
+      const payload = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? `Request failed with ${response.status}`);
       }
 
-      if (!term) {
-        return true;
+      onAdopted();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not onboard the tenant.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className={`rounded-md border p-3 ${selected ? 'border-accent bg-accent/5' : 'border-[var(--color-border)] bg-[var(--color-surface)]'}`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {onboarded ? (
+              <p className="truncate text-sm font-semibold text-[var(--color-text)]">{tenant.clientName}</p>
+            ) : (
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Client name, e.g. RWK Goodman"
+                className="w-64"
+              />
+            )}
+            {tenant.isHomeTenant && <Badge tone="neutral">Synextra</Badge>}
+            {onboarded ? <Badge tone="ok">Onboarded</Badge> : <Badge tone="warning">Not named yet</Badge>}
+          </div>
+          <p className="mt-1 font-mono text-[11px] text-[var(--color-text-tertiary)]">{tenant.tenantId}</p>
+        </div>
+
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {onboarded ? (
+            <Button size="sm" variant={selected ? 'primary' : 'secondary'} onClick={onSelect}>
+              {selected ? 'Selected' : 'Select'}
+            </Button>
+          ) : (
+            <Button size="sm" loading={saving} disabled={name.trim().length < 2} onClick={() => void adopt()}>
+              Onboard
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <Notice tone="error" className="mt-2">
+          {error}
+        </Notice>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        className="mt-2 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+      >
+        {tenant.subscriptionCount} subscription{tenant.subscriptionCount === 1 ? '' : 's'}, all in scope{' '}
+        <span className="text-[var(--color-text-tertiary)]">{expanded ? '▴' : '▾'}</span>
+      </button>
+
+      {expanded && (
+        <ul className="mt-2 space-y-1 border-t border-[var(--color-border)] pt-2">
+          {tenant.subscriptions.map((subscription) => (
+            <li key={subscription.subscriptionId} className="flex flex-wrap items-baseline gap-2 text-xs">
+              <span className="text-[var(--color-text)]">{subscription.displayName}</span>
+              <span className="font-mono text-[10px] text-[var(--color-text-tertiary)]">{subscription.subscriptionId}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export function AccessStep({ selectedTenantId, onSelectTenant }: Readonly<AccessStepProps>) {
+  const [discovery, setDiscovery] = useState<TenantDiscoveryResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch('/api/onboarding/tenants', { signal: controller.signal });
+        const payload = (await response.json()) as TenantDiscoveryResult & { error?: string };
+
+        if (!response.ok) {
+          throw new Error(payload.error ?? `Request failed with ${response.status}`);
+        }
+
+        setDiscovery(payload);
+      } catch (cause) {
+        if (!controller.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : 'Could not list tenants.');
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
-
-      return (
-        subscription.displayName.toLowerCase().includes(term) ||
-        subscription.subscriptionId.includes(term) ||
-        (subscription.suggestedClientName ?? '').toLowerCase().includes(term) ||
-        (subscription.assignedClientName ?? '').toLowerCase().includes(term)
-      );
-    });
-  }, [subscriptions, search, onlyUnassigned]);
-
-  const delegated = subscriptions.filter((subscription) => subscription.isDelegated).length;
-  const assigned = subscriptions.filter((subscription) => subscription.assignedClientSlug).length;
-
-  const clients = useMemo(() => {
-    const names = new Set<string>();
-
-    for (const subscription of subscriptions) {
-      const name = subscription.assignedClientName ?? subscription.suggestedClientName;
-      if (name) names.add(name);
     }
 
-    return [...names].sort((left, right) => left.localeCompare(right));
-  }, [subscriptions]);
+    void load();
+    return () => controller.abort();
+  }, [reloadKey]);
+
+  const tenants = discovery?.tenants ?? [];
+  const delegated = tenants.filter((tenant) => !tenant.isHomeTenant);
+  const onboarded = tenants.filter((tenant) => tenant.clientSlug);
+  const subscriptions = tenants.reduce((total, tenant) => total + tenant.subscriptionCount, 0);
 
   if (loading && !discovery) {
     return (
       <Card>
         <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
-          <Spinner /> Asking Azure which subscriptions Pulse can reach…
+          <Spinner /> Asking Azure which tenants Pulse can reach…
         </div>
       </Card>
     );
@@ -75,132 +184,64 @@ export function AccessStep({ discovery, loading, error, onRefresh, selectedClien
       {error && <Notice tone="error">{error}</Notice>}
 
       {discovery && !discovery.credentialsConfigured && (
-        <Notice tone="warning">
-          Azure credentials are not configured, so Pulse cannot see anything. Set the Azure identity in Settings first.
-        </Notice>
+        <Notice tone="warning">Azure credentials are not configured, so Pulse cannot see anything.</Notice>
       )}
 
       {discovery?.message && discovery.credentialsConfigured && <Notice tone="info">{discovery.message}</Notice>}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Visible to Pulse" value={subscriptions.length} />
-        <StatTile label="Delegated" value={delegated} hint="via Lighthouse" />
-        <StatTile label="Assigned to a client" value={assigned} />
-        <StatTile label="Clients seen" value={clients.length} />
+        <StatTile label="Tenants reachable" value={tenants.length} />
+        <StatTile label="Client tenants" value={delegated.length} hint="via Lighthouse" />
+        <StatTile label="Onboarded" value={onboarded.length} />
+        <StatTile label="Subscriptions in scope" value={subscriptions} />
       </div>
 
       <Card>
         <CardHeader
-          title="Subscriptions Pulse can reach"
-          description="Client subscriptions appear here once Pulse's identity is authorised in their Lighthouse delegation. Assigning one to a client is what brings it into Pulse."
+          title="Tenants Pulse can reach"
+          description="Lighthouse delegation is the decision. A delegated tenant is in scope, and so is every subscription in it, so there is nothing to opt in per subscription. Azure never reports a customer tenant's name, so it is typed here once."
           actions={
-            <Button size="sm" variant="secondary" onClick={onRefresh}>
+            <Button size="sm" variant="secondary" onClick={() => setReloadKey((value) => value + 1)}>
               Refresh
             </Button>
           }
         />
 
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search name, client or subscription id…"
-            className="min-w-[16rem] flex-1"
-          />
-          <Button size="sm" variant={onlyUnassigned ? 'primary' : 'secondary'} onClick={() => setOnlyUnassigned((value) => !value)}>
-            Unassigned only
-          </Button>
-        </div>
-
-        {visible.length === 0 ? (
+        {tenants.length === 0 ? (
           <p className="text-sm text-[var(--color-text-secondary)]">
-            {subscriptions.length === 0
-              ? 'No subscriptions visible. Until Pulse is authorised in a Lighthouse delegation it can only see its own tenant.'
-              : 'No subscriptions match the filter.'}
+            No tenants visible. Until Pulse is authorised in a Lighthouse delegation it can only see its own.
           </p>
         ) : (
-          <div className="-mx-4 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--color-border)] text-left text-[11px] uppercase tracking-wide text-[var(--color-text-tertiary)]">
-                  <th className="px-4 py-2 font-medium">Subscription</th>
-                  <th className="px-4 py-2 font-medium">Access</th>
-                  <th className="px-4 py-2 font-medium">Client</th>
-                  <th className="px-4 py-2 font-medium">Tenant</th>
-                  <th className="px-4 py-2 font-medium" />
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((subscription) => {
-                  const client = subscription.assignedClientName ?? subscription.suggestedClientName;
-                  const isSelected = client !== undefined && client === selectedClient;
-
-                  return (
-                    <tr
-                      key={subscription.subscriptionId}
-                      className={`border-b border-[var(--color-border)] last:border-0 ${isSelected ? 'bg-accent/5' : ''}`}
-                    >
-                      <td className="px-4 py-2">
-                        <div className="font-medium text-[var(--color-text)]">{subscription.displayName}</div>
-                        <div className="font-mono text-[11px] text-[var(--color-text-tertiary)]">{subscription.subscriptionId}</div>
-                      </td>
-                      <td className="px-4 py-2">
-                        {subscription.isDelegated ? (
-                          <Badge tone="ok">Lighthouse</Badge>
-                        ) : (
-                          <Badge tone="neutral">Home tenant</Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-2">
-                        {subscription.assignedClientName ? (
-                          <span className="text-[var(--color-text)]">{subscription.assignedClientName}</span>
-                        ) : subscription.suggestedClientName ? (
-                          <span className="text-[var(--color-text-secondary)]">
-                            {subscription.suggestedClientName} <Badge tone="info">suggested</Badge>
-                          </span>
-                        ) : (
-                          <span className="text-[var(--color-text-tertiary)]">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-[11px] text-[var(--color-text-secondary)]">
-                        {subscription.tenantId.slice(0, 8)}…
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        {client && (
-                          <Button
-                            size="sm"
-                            variant={isSelected ? 'primary' : 'ghost'}
-                            onClick={() =>
-                              onSelectClient(isSelected ? null : { name: client, slug: subscription.assignedClientSlug ?? null })
-                            }
-                          >
-                            {isSelected ? 'Selected' : 'Onboard'}
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="grid gap-2">
+            {tenants.map((tenant) => (
+              <TenantRow
+                key={tenant.tenantId}
+                tenant={tenant}
+                selected={tenant.tenantId === selectedTenantId}
+                onSelect={() =>
+                  onSelectTenant(
+                    tenant.tenantId === selectedTenantId
+                      ? null
+                      : { name: tenant.clientName ?? tenant.tenantId, slug: tenant.clientSlug ?? null, tenantId: tenant.tenantId }
+                  )
+                }
+                onAdopted={() => setReloadKey((value) => value + 1)}
+              />
+            ))}
           </div>
         )}
       </Card>
 
       <Card>
         <CardHeader
-          title="Not seeing a client?"
-          description="Pulse can only reach subscriptions delegated to the Synextra tenant through Azure Lighthouse, with its identity authorised in the delegation."
+          title="Missing a client?"
+          description="Pulse reaches a tenant only when its Lighthouse delegation authorises the Synextra - Monitoring Reader group."
         />
         <ol className="list-decimal space-y-1 pl-5 text-sm text-[var(--color-text-secondary)]">
-          <li>
-            The delegation must authorise the <span className="font-medium text-[var(--color-text)]">Synextra - Monitoring Reader</span> group,
-            which Pulse&apos;s identity belongs to.
-          </li>
-          <li>Reuse the existing offer name when redeploying, or Azure creates a second delegation alongside the first.</li>
-          <li>Subscriptions reached only by a named admin account in the client tenant are invisible to Pulse and always will be.</li>
+          <li>Redeploy the delegation with that group added, reusing the offer name so it updates in place.</li>
+          <li>Subscriptions reached only by a named admin account in the client tenant stay invisible to Pulse.</li>
         </ol>
-        <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">Full runbook: docs/onboarding/LIGHTHOUSE.md</p>
+        <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">Runbook: docs/onboarding/LIGHTHOUSE.md</p>
       </Card>
     </div>
   );
