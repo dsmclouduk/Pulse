@@ -10,6 +10,7 @@ import {
   tiersUpTo,
   type BaselineTier
 } from '../lib/onboarding/baseline.js';
+import { generateBaselineDeployment, type BaselinePlanInput } from '../lib/onboarding/bicepGenerator.js';
 import { listDiscoveredSubscriptions } from '../lib/onboarding/subscriptionDiscovery.js';
 
 /**
@@ -46,6 +47,61 @@ onboardingRouter.get('/baseline', (request, response) => {
     scopedTo: resourceTypes.length > 0 ? resourceTypes : null,
     ruleCount: rules.length,
     rules
+  });
+});
+
+/**
+ * Generates the per-client deployment. Pulse never applies it: the response is files and two
+ * commands for an engineer to run with a write-capable account. The webhook token is deliberately
+ * absent, so nothing sensitive passes through here.
+ */
+onboardingRouter.post('/plan', (request, response) => {
+  const body = request.body as Partial<BaselinePlanInput> | undefined;
+
+  const missing = (['clientSlug', 'subscriptionId', 'location'] as const).filter((field) => !body?.[field]);
+
+  if (!body || missing.length > 0) {
+    response.status(400).json({ error: `Missing required field(s): ${missing.join(', ')}.` });
+    return;
+  }
+
+  const input: BaselinePlanInput = {
+    clientSlug: body.clientSlug ?? '',
+    clientName: body.clientName ?? body.clientSlug ?? '',
+    subscriptionId: body.subscriptionId ?? '',
+    tier: parseTier(body.tier),
+    resourceGroup: body.resourceGroup ?? 'rg-pulse-monitoring',
+    location: body.location ?? '',
+    regions: body.regions?.length ? body.regions : [body.location ?? ''],
+    resourceTypes: body.resourceTypes ?? [],
+    perResourceTargets: body.perResourceTargets,
+    workspaceName: body.workspaceName,
+    pulseBaseUrl: body.pulseBaseUrl ?? process.env.APP_SERVICE_URL ?? '',
+    deployAgentPolicy: body.deployAgentPolicy
+  };
+
+  const deployment = generateBaselineDeployment(input);
+
+  console.log(
+    `[${new Date().toISOString()}] [onboarding] generated baseline for ${input.clientSlug}: ${deployment.rules.length} rule(s), ${deployment.warnings.length} warning(s)`
+  );
+
+  response.json({
+    version: BASELINE_VERSION,
+    tier: input.tier,
+    ruleCount: deployment.rules.length,
+    rules: deployment.rules.map((rule) => ({
+      key: rule.key,
+      title: rule.title,
+      resourceType: rule.resourceType,
+      kind: rule.kind,
+      scope: rule.scope,
+      severity: rule.severity
+    })),
+    files: deployment.files,
+    whatIfCommand: deployment.whatIfCommand,
+    deployCommand: deployment.deployCommand,
+    warnings: deployment.warnings
   });
 });
 
