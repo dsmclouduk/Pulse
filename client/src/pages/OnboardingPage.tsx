@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { AccessStep } from '@/components/onboarding/AccessStep';
+import { CoverageStep } from '@/components/onboarding/CoverageStep';
 import { InventoryStep } from '@/components/onboarding/InventoryStep';
-import { CoverageStep, DeployStep, PlanStep, VerifyStep } from '@/components/onboarding/steps';
+import { DeployStep, PlanStep, VerifyStep } from '@/components/onboarding/steps';
 import { Button } from '@/components/ui';
 import type { SubscriptionDiscoveryResult } from '@/types';
 
@@ -117,7 +118,7 @@ export function OnboardingPage() {
   }, [reloadKey]);
 
   // Access and Inventory are wired to live Azure; the rest render the intended design.
-  const reachable = useMemo(() => new Set<OnboardingStepId>(['access', 'inventory']), []);
+  const reachable = useMemo(() => new Set<OnboardingStepId>(['access', 'inventory', 'coverage']), []);
 
   const index = STEPS.findIndex((entry) => entry.id === step);
   const previous = index > 0 ? STEPS[index - 1] : null;
@@ -139,7 +140,7 @@ export function OnboardingPage() {
           />
         )}
         {step === 'inventory' && <InventoryStep clientSlug={selectedClient?.slug ?? null} clientName={selectedClient?.name ?? null} />}
-        {step === 'coverage' && <CoverageStep clientName={selectedClient?.name ?? null} />}
+        {step === 'coverage' && <CoverageStep clientSlug={selectedClient?.slug ?? null} clientName={selectedClient?.name ?? null} />}
         {step === 'plan' && <PlanStep clientName={selectedClient?.name ?? null} />}
         {step === 'deploy' && <DeployStep clientName={selectedClient?.name ?? null} />}
         {step === 'verify' && <VerifyStep clientName={selectedClient?.name ?? null} />}

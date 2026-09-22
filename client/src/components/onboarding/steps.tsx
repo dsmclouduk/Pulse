@@ -24,64 +24,6 @@ function ClientHeading({ clientName, fallback }: Readonly<{ clientName: string |
   return <Notice tone="warning">{fallback}</Notice>;
 }
 
-/* ── 3. Coverage ──────────────────────────────────────────────── */
-
-const COVERAGE_ROWS: Array<{ check: string; state: 'ok' | 'partial' | 'missing'; detail: string }> = [
-  { check: 'Log Analytics workspace', state: 'ok', detail: 'law-rwk-prod, uksouth' },
-  { check: 'Azure Monitor Agent on VMs', state: 'partial', detail: '18 of 24 VMs' },
-  { check: 'VM Insights DCR associated', state: 'partial', detail: '18 of 24 VMs' },
-  { check: 'Pulse action group', state: 'missing', detail: 'not present' },
-  { check: 'VM alert rules', state: 'missing', detail: 'no pulse-managed rules found' },
-  { check: 'SQL alert rules', state: 'missing', detail: 'no pulse-managed rules found' },
-  { check: 'Service Health alert', state: 'missing', detail: 'not configured' }
-];
-
-const COVERAGE_TONE = { ok: 'ok', partial: 'warning', missing: 'error' } as const;
-const COVERAGE_LABEL = { ok: 'In place', partial: 'Partial', missing: 'Missing' } as const;
-
-export function CoverageStep({ clientName }: Readonly<{ clientName: string | null }>) {
-  return (
-    <div className="flex flex-col gap-3">
-      <PreviewBanner issue="#35" />
-      <ClientHeading clientName={clientName} fallback="Pick a client on the Access step to read its coverage." />
-
-      <Card>
-        <CardHeader
-          title="What monitoring exists today"
-          description="Read back from Azure, not from Pulse's own records. Pulse recognises its own rules by the pulse-managed tag, so a client's existing alerts are never touched or double-counted."
-          actions={
-            <Button size="sm" variant="secondary">
-              Re-check
-            </Button>
-          }
-        />
-        <div className="-mx-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--color-border)] text-left text-[11px] uppercase tracking-wide text-[var(--color-text-tertiary)]">
-                <th className="px-4 py-2 font-medium">Check</th>
-                <th className="px-4 py-2 font-medium">State</th>
-                <th className="px-4 py-2 font-medium">Detail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {COVERAGE_ROWS.map((row) => (
-                <tr key={row.check} className="border-b border-[var(--color-border)] last:border-0">
-                  <td className="px-4 py-2 text-[var(--color-text)]">{row.check}</td>
-                  <td className="px-4 py-2">
-                    <Badge tone={COVERAGE_TONE[row.state]}>{COVERAGE_LABEL[row.state]}</Badge>
-                  </td>
-                  <td className="px-4 py-2 text-[var(--color-text-secondary)]">{row.detail}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
 /* ── 4. Plan ──────────────────────────────────────────────────── */
 
 const PLAN_RULES = [

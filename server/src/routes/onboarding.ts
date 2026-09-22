@@ -11,6 +11,7 @@ import {
   type BaselineTier
 } from '../lib/onboarding/baseline.js';
 import { generateBaselineDeployment, type BaselinePlanInput } from '../lib/onboarding/bicepGenerator.js';
+import { buildCoverageReport, queryCoverageFacts } from '../lib/onboarding/coverageReport.js';
 import { lastInventoryRun, listInventory, saveInventory } from '../lib/onboarding/inventoryRepository.js';
 import { queryInventory, regionsInUse, summariseInventory, type DiscoveredResource } from '../lib/onboarding/resourceGraph.js';
 import { prisma } from '../lib/prisma.js';
@@ -139,6 +140,50 @@ onboardingRouter.post('/inventory/refresh', async (request, response) => {
       written,
       truncated
     });
+  } catch (error) {
+    response.status(502).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+/**
+ * Reads back what monitoring exists in Azure, so the plan can show a diff rather than assume a clean
+ * slate. Read-only, and it trusts Azure over Pulse's own records: the point is to catch the case
+ * where they disagree.
+ */
+onboardingRouter.get('/coverage', async (request, response) => {
+  const clientSlug = typeof request.query.clientSlug === 'string' ? request.query.clientSlug : undefined;
+  const client = await resolveClient(clientSlug);
+
+  if (!client) {
+    response.status(404).json({ error: `No client account for slug "${clientSlug ?? ''}".` });
+    return;
+  }
+
+  const subscriptionIds = client.azureSubscriptions.map((subscription) => subscription.externalSubscriptionId);
+
+  if (subscriptionIds.length === 0) {
+    response.status(400).json({ error: `${client.name} has no subscriptions assigned yet.` });
+    return;
+  }
+
+  try {
+    // The tier decides what "complete" means, and the inventory decides which sections apply.
+    const stored = await listInventory(client.id);
+    const resourceTypes = [...new Set(stored.map((row) => row.resourceType))];
+
+    const facts = await queryCoverageFacts(subscriptionIds);
+    const report = buildCoverageReport(facts, {
+      clientSlug: client.slug,
+      tier: parseTier(request.query.tier),
+      resourceTypes,
+      pulseBaseUrl: process.env.APP_SERVICE_URL
+    });
+
+    console.log(
+      `[${new Date().toISOString()}] [onboarding] coverage ${client.slug}: ${report.presentRuleCount}/${report.expectedRuleCount} rules, ${report.vmsWithAgent}/${report.vmsTotal} agents`
+    );
+
+    response.json({ ...report, clientName: client.name, inventoryRun: stored.length > 0 });
   } catch (error) {
     response.status(502).json({ error: error instanceof Error ? error.message : String(error) });
   }

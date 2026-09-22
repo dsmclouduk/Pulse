@@ -507,6 +507,40 @@ export interface InventorySummary {
   byType: InventoryTypeRow[];
 }
 
+export type CoverageState = 'MONITORED' | 'PARTIAL' | 'UNMONITORED' | 'BLOCKED_NO_IDENTITY' | 'UNKNOWN';
+
+export interface CoverageCheck {
+  key: string;
+  label: string;
+  state: CoverageState;
+  detail: string;
+}
+
+export interface RuleCoverage {
+  key: string;
+  title: string;
+  resourceType: string;
+  severity: number;
+  deployedCount: number;
+  present: boolean;
+}
+
+/** What monitoring exists in Azure for a client, read back rather than assumed. */
+export interface CoverageReport {
+  clientSlug: string;
+  clientName?: string;
+  checkedAt: string;
+  checks: CoverageCheck[];
+  rules: RuleCoverage[];
+  expectedRuleCount: number;
+  presentRuleCount: number;
+  /** Rules Pulse deployed that the catalogue no longer wants at this tier. */
+  orphanedRuleNames: string[];
+  vmsTotal: number;
+  vmsWithAgent: number;
+  vmsBlockedNoIdentity: number;
+}
+
 export interface ClientSubscriptionSummary {
   externalSubscriptionId: string;
   displayName: string;

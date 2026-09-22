@@ -32,7 +32,7 @@ echo "Subscription: $SUB  Region: $LOCATION  RG: $RG"
 az group create -n "$RG" -l "$LOCATION" -o none
 
 echo "== Log Analytics workspace"
-az monitor log-analytics workspace create -g "$RG" -n "$LAW" -l "$LOCATION" -o none
+az monitor log-analytics workspace create -g "$RG" -n "$LAW" -l "$LOCATION"   --tags pulse-managed=true pulse-client=synextra-test pulse-baseline=2026.09.1 -o none
 LAW_ID=$(az monitor log-analytics workspace show -g "$RG" -n "$LAW" --query id -o tsv)
 LAW_CUSTOMER_ID=$(az monitor log-analytics workspace show -g "$RG" -n "$LAW" --query customerId -o tsv)
 
@@ -82,7 +82,7 @@ az monitor data-collection rule association create --name pulse-vminsights --rul
 
 echo "== Action group → Pulse webhook (common alert schema)"
 az monitor action-group create -g "$RG" -n "$AG" --short-name pulse \
-  --action webhook pulse "$PULSE_URL/api/webhook/azure-alerts/$WEBHOOK_SECRET" usecommonalertschema -o none
+  --action webhook pulse "$PULSE_URL/api/webhook/azure-alerts/$WEBHOOK_SECRET" usecommonalertschema   --tags pulse-managed=true pulse-client=synextra-test pulse-baseline=2026.09.1 -o none
 AG_ID=$(az monitor action-group show -g "$RG" -n "$AG" --query id -o tsv)
 
 echo "== CPU metric alert (breachable: > 5% for 1 minute)"
