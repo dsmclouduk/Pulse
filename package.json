@@ -7,8 +7,7 @@
     "server"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace server\" \"npm run dev --workspace client\"",
-    "dev:all": "docker compose up -d db && npm run dev",
+    "dev": "node scripts/dev/dev.mjs",
     "db:local": "docker compose up -d db",
     "db:local:down": "docker compose down",
     "tunnel": "node scripts/dev/tunnel.mjs",
@@ -20,7 +19,8 @@
     "db:push": "prisma db push",
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "dev:no-db": "node scripts/dev/dev.mjs --no-db"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

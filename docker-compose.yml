@@ -10,6 +10,8 @@ services:
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: pulse-sql
+    # Come back after a reboot or a Docker Desktop restart, so dev does not start with a dead database.
+    restart: unless-stopped
     environment:
       ACCEPT_EULA: 'Y'
       MSSQL_SA_PASSWORD: 'Pulse_Dev_Passw0rd!'

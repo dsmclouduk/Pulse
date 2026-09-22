@@ -237,8 +237,9 @@ Copy `.env.example` to `.env` before running anything.
 cd server && npm install
 cd ../client && npm install
 
-# Run both concurrently (from root, if concurrently is set up)
-npm run dev
+# Database + server + client, one command (scripts/dev/dev.mjs)
+npm run dev                   # API http://localhost:3001, UI http://localhost:5173
+npm run dev:no-db             # skip the container (already running, or using Azure SQL)
 
 # Or separately:
 cd server && npm run dev      # http://localhost:3001

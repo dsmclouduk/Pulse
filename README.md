@@ -66,6 +66,8 @@ Alerts, comments and enrichment runs are written through Prisma when `DATABASE_U
 Local database (SQL Server 2022 in Docker, host port 14330 because a local SQL Server service often owns 1433):
 
 ```bash
+npm run dev                 # starts the container, the API and the UI together
+# or just the database:
 npm run db:local            # docker compose up -d db
 # .env
 DATABASE_URL="sqlserver://localhost:14330;database=Pulse;user=sa;password=Pulse_Dev_Passw0rd!;encrypt=true;trustServerCertificate=true"
